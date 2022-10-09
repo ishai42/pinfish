@@ -1,19 +1,74 @@
+mod nfs4;
+mod rpc;
 mod xdr;
-mod oncrpc;
 
-fn main() {
-    use bytes::{Buf, BufMut};
+use argh::FromArgs;
+use tokio::net::TcpStream;
+use std::error::Error;
+use rpc::Packer;
+use bytes::{Buf, BufMut};
+use crate::xdr::Packer as XdrPacker;
+use std::borrow::BorrowMut;
 
-    let mut buf = b"hello world"[..].take(5);
-    let mut dst = vec![];
+const NFS_DEFAULT_PORT: u16 = 2049;
 
-    dst.put(&mut buf);
-    assert_eq!(dst, b"hello");
+#[derive(FromArgs)]
+/// Test NFS client
+struct Command {
+    /// host name or IP address
+    #[argh(option, short = 'h')]
+    host: String,
 
-    let mut buf = buf.into_inner();
-    dst.clear();
-    dst.put(&mut buf);
-    assert_eq!(dst, b" world");
+    /// port, default is 2049
+    #[argh(option, short = 'p', default = "2049")]
+    port: u16,
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+
+    let cmd : Command = argh::from_env();
+    let host_string = std::format!("{}:{}", cmd.host, cmd.port);
+
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async {
+            let connection = TcpStream::connect(host_string).await?;
+            println!("Connected");
+            let mut client = rpc::RpcClient::new(connection);
+            let mut buf = bytes::BytesMut::new();
+            let xid = client.next_xid();
+            let header = rpc::CallHeader{
+                prog: nfs4::PROG_NFS,
+                vers: 4,
+                proc: 0,
+                cred: rpc::OpaqueAuth::new_sys(1, bytes::Bytes::from_static(b"blah"), 0, 0, Vec::new()),
+                verf: rpc::OpaqueAuth::new_none(),
+            };
+
+            buf.pack_uint(0); // placeholder for frag
+            buf.pack_uint(xid);
+            buf.pack_call_header(&header);
+            let frag_size = (buf.remaining() - 4) as u32;
+            let frag_size = frag_size | 0x80000000;
+            {
+                let mut borrow: &mut [u8] = buf.borrow_mut();
+                (&mut borrow[0..4]).pack_uint(frag_size);
+            }
+
+            client.send(buf.freeze()).await?;
+
+            println!("sent null");
+
+            let mut response_buf = bytes::BytesMut::new();
+            client.read_packet(&mut response_buf, 1024).await?;
+
+            println!("got response");
+            todo!();
+
+            Ok(())
+        })
 }
 
 /*

@@ -1,148 +1,167 @@
 use bytes::{Buf, BufMut};
 
+// XDR RFC 4506
+
 const PAD_ZERO: [u8; 4] = [0; 4];
 
-/// Packer object that knows how to pack the basic XDR types into
-/// a buffer
-struct Packer<Buffer: BufMut> {
-    buf: Buffer,
+/// A trait for packing data in XDR format into a buffer.
+pub trait Packer {
+    fn pack_uint(&mut self, value: u32);
+
+    fn pack_int(&mut self, value: i32);
+
+    fn pack_hyper(&mut self, value: i64);
+
+    fn pack_uhyper(&mut self, value: u64);
+
+    fn pack_bool(&mut self, value: bool);
+
+    fn pack_float(&mut self, value: f32);
+
+    fn pack_double(&mut self, value: f64);
+
+    fn pack_opaque(&mut self, value: &[u8]);
+
+    fn pack_opaque_fixed(&mut self, value: &[u8]);
+
+    fn pack_string(&mut self, value: &str);
+
+    fn pack_array<I, F>(&mut self, array: &[I], pack_fn: F)
+    where
+        F: Fn(&mut Self, &I) -> (),
+    {
+        self.pack_uint(array.len() as u32);
+        for item in array {
+            pack_fn(self, item);
+        }
+    }
 }
 
-impl<Buffer: BufMut> Packer<Buffer> {
-    pub fn new(buf: Buffer) -> Self {
-        Packer { buf }
+impl<Buffer: BufMut> Packer for Buffer {
+    #[inline]
+    fn pack_uint(&mut self, value: u32) {
+        self.put_u32(value)
     }
 
     #[inline]
-    pub fn get_mut(&mut self) -> &mut Buffer {
-        &mut self.buf
+    fn pack_int(&mut self, value: i32) {
+        self.put_i32(value)
     }
 
     #[inline]
-    pub fn get_ref(&self) -> &Buffer {
-        &self.buf
+    fn pack_hyper(&mut self, value: i64) {
+        self.put_i64(value)
     }
 
     #[inline]
-    pub fn into_inner(self) -> Buffer {
-        self.buf
+    fn pack_uhyper(&mut self, value: u64) {
+        self.put_u64(value)
     }
 
     #[inline]
-    pub fn pack_uint(&mut self, value: u32) {
-        self.buf.put_u32(value)
+    fn pack_bool(&mut self, value: bool) {
+        self.put_u32(value as u32)
     }
 
     #[inline]
-    pub fn pack_int(&mut self, value: i32) {
-        self.buf.put_i32(value)
+    fn pack_float(&mut self, value: f32) {
+        self.put_f32(value)
     }
 
     #[inline]
-    pub fn pack_hyper(&mut self, value: i64) {
-        self.buf.put_i64(value)
+    fn pack_double(&mut self, value: f64) {
+        self.put_f64(value)
     }
 
     #[inline]
-    pub fn pack_uhyper(&mut self, value: u64) {
-        self.buf.put_u64(value)
-    }
-
-    #[inline]
-    pub fn pack_bool(&mut self, value: bool) {
-        self.buf.put_u32(value as u32)
-    }
-
-    #[inline]
-    pub fn pack_float(&mut self, value: f32) {
-        self.buf.put_f32(value)
-    }
-
-    #[inline]
-    pub fn pack_double(&mut self, value: f64) {
-        self.buf.put_f64(value)
-    }
-
-    #[inline]
-    pub fn pack_opaque(&mut self, value: &[u8]) {
-        self.buf.put_u32(value.len() as u32);
+    fn pack_opaque(&mut self, value: &[u8]) {
+        self.put_u32(value.len() as u32);
         self.pack_opaque_fixed(value);
     }
 
     #[inline]
-    pub fn pack_opaque_fixed(&mut self, value: &[u8]) {
+    fn pack_opaque_fixed(&mut self, value: &[u8]) {
         let len = value.len();
-        self.buf.put_slice(value);
-        self.buf.put_slice(&PAD_ZERO[..(4 - len % 4) % 4])
+        self.put_slice(value);
+        self.put_slice(&PAD_ZERO[..(4 - len % 4) % 4])
     }
 
     #[inline]
-    pub fn pack_string(&mut self, value: &str) {
+    fn pack_string(&mut self, value: &str) {
         self.pack_opaque(value.as_bytes())
     }
 }
 
-/// Packer object that knows how to pack the basic XDR types into
-/// a buffer
-struct Unpacker<Buffer: Buf> {
-    buf: Buffer,
+/// A trait for unpacking XDR from a buffer
+pub trait Unpacker {
+    fn unpack_uint(&mut self) -> u32;
+
+    fn unpack_int(&mut self) -> i32;
+
+    fn unpack_hyper(&mut self) -> i64;
+
+    fn unpack_uhyper(&mut self) -> u64;
+
+    fn unpack_bool(&mut self) -> bool;
+
+    fn unpack_float(&mut self) -> f32;
+
+    fn unpack_double(&mut self) -> f64;
+
+    fn unpack_opaque(&mut self) -> bytes::Bytes;
+
+    fn unpack_opaque_fixed(&mut self, nbytes: usize) -> bytes::Bytes;
 }
 
-impl<Buffer: Buf> Unpacker<Buffer> {
-    pub fn new(buf: Buffer) -> Self {
-        Unpacker { buf }
+impl<Buffer: Buf> Unpacker for Buffer {
+    #[inline]
+    fn unpack_uint(&mut self) -> u32 {
+        self.get_u32()
     }
 
     #[inline]
-    pub fn unpack_uint(&mut self) -> u32 {
-        self.buf.get_u32()
+    fn unpack_int(&mut self) -> i32 {
+        self.get_i32()
     }
 
     #[inline]
-    pub fn unpack_int(&mut self) -> i32 {
-        self.buf.get_i32()
+    fn unpack_hyper(&mut self) -> i64 {
+        self.get_i64()
     }
 
     #[inline]
-    pub fn unpack_hyper(&mut self) -> i64 {
-        self.buf.get_i64()
+    fn unpack_uhyper(&mut self) -> u64 {
+        self.get_u64()
     }
 
     #[inline]
-    pub fn unpack_uhyper(&mut self) -> u64 {
-        self.buf.get_u64()
-    }
-
-    #[inline]
-    pub fn unpack_bool(&mut self) -> bool {
+    fn unpack_bool(&mut self) -> bool {
         self.unpack_uint() != 0
     }
 
     #[inline]
-    pub fn unpack_float(&mut self) -> f32 {
-        self.buf.get_f32()
+    fn unpack_float(&mut self) -> f32 {
+        self.get_f32()
     }
 
     #[inline]
-    pub fn unpack_double(&mut self) -> f64 {
-        self.buf.get_f64()
+    fn unpack_double(&mut self) -> f64 {
+        self.get_f64()
     }
 
     #[inline]
-    pub fn unpack_opaque(&mut self) -> bytes::Bytes {
+    fn unpack_opaque(&mut self) -> bytes::Bytes {
         let len = self.unpack_uint() as usize;
         self.unpack_opaque_fixed(len)
     }
 
     #[inline]
-    pub fn unpack_opaque_fixed(&mut self, nbytes: usize) -> bytes::Bytes {
-        let ret = self.buf.copy_to_bytes(nbytes);
-        self.buf.advance((4 - nbytes % 4) % 4);
+    fn unpack_opaque_fixed(&mut self, nbytes: usize) -> bytes::Bytes {
+        let ret = self.copy_to_bytes(nbytes);
+        self.advance((4 - nbytes % 4) % 4);
         ret
     }
-
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -150,8 +169,7 @@ mod tests {
 
     #[test]
     fn test_pack_unpack() {
-        let buf = bytes::BytesMut::new();
-        let mut buf = Packer::new(buf);
+        let mut buf = bytes::BytesMut::new();
 
         buf.pack_uint(0x01020304);
         buf.pack_uhyper(0x0506070809101112);
@@ -165,8 +183,8 @@ mod tests {
         buf.pack_opaque(&[0x19, 0x20, 0x21, 0x22, 0x23]);
         buf.pack_string("The quick brown fox jumps over the lazy dog");
 
-        let buf = buf.into_inner().freeze();
-        let mut buf = Unpacker::new(buf);
+        let mut buf = buf.freeze();
+
         assert_eq!(buf.unpack_uint(), 0x01020304);
         assert_eq!(buf.unpack_uhyper(), 0x0506070809101112);
         assert_eq!(buf.unpack_int(), -1234567);
@@ -175,29 +193,17 @@ mod tests {
         assert_eq!(buf.unpack_bool(), false);
         assert_eq!(buf.unpack_float(), 0.1234);
         assert_eq!(buf.unpack_double(), 0.5678);
-        assert_eq!(buf.unpack_opaque_fixed(5).as_ref(), &[0x14, 0x15, 0x16, 0x17, 0x18]);
-        assert_eq!(buf.unpack_opaque().as_ref(), &[0x19, 0x20, 0x21, 0x22, 0x23]);
-        assert_eq!(buf.unpack_opaque().as_ref(), b"The quick brown fox jumps over the lazy dog");
+        assert_eq!(
+            buf.unpack_opaque_fixed(5).as_ref(),
+            &[0x14, 0x15, 0x16, 0x17, 0x18]
+        );
+        assert_eq!(
+            buf.unpack_opaque().as_ref(),
+            &[0x19, 0x20, 0x21, 0x22, 0x23]
+        );
+        assert_eq!(
+            buf.unpack_opaque().as_ref(),
+            b"The quick brown fox jumps over the lazy dog"
+        );
     }
-
-    #[test]
-    fn test_get_xxx() {
-        let buf = bytes::BytesMut::new();
-        let mut buf = Packer::new(buf);
-
-        buf.pack_uint(0x12345678);
-
-        {
-            let borrow_mut : &mut bytes::BytesMut = buf.get_mut();
-            borrow_mut[0] = 0xab;
-        }
-
-        {
-            let borrow : &bytes::BytesMut = buf.get_ref();
-            assert_eq!(borrow[1], 0x34_u8);
-            assert_eq!(borrow[0], 0xab_u8);
-        }
-
-    }
-
 }
