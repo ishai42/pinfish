@@ -1,13 +1,19 @@
 use crate::xdr::{self, Unpacker};
-use bytes::{Buf, BufMut, Bytes};
-use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
+use bytes::{Buf, BufMut, Bytes, BytesMut};
+use tokio::io::{self, AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
 use tokio::net::{TcpStream};
 use std::collections::BTreeMap;
+use std::sync::{Arc, Mutex};
+use tokio::sync::oneshot;
+
+
+const MAX_PACKET_SIZE: u32 = 1024*1024;
 
 // RFC5531  RPC v2
 
 const LAST_FRAGMENT: u32 = 0x80000000;
 const CALL: u32 = 0;
+const REPLY: u32 = 1;
 
 const AUTH_NONE: u32 = 0;
 const AUTH_SYS: u32 = 1;
@@ -146,24 +152,70 @@ impl OpaqueAuth {
 }
 
 
-struct RcpClientReceiver {
-    connection: tokio::io::ReadHalf<TcpStream>,
+struct RpcClientReceiver {
+    connection: ReadHalf<TcpStream>,
+    pending: Arc<Mutex<BTreeMap<u32, oneshot::Sender<Bytes>>>>,
+    max_size: u32,
+}
+
+impl RpcClientReceiver {
+    pub async fn run(&mut self) -> io::Result<()> {
+        loop {
+            let mut buf = BytesMut::new();
+            read_packet(&mut self.connection, &mut buf, self.max_size).await?;
+            let mut buf = buf.freeze();
+            if buf.remaining() < 8 {
+                println!("bad packet -- too short");
+                continue;
+            }
+
+            let xid = buf.unpack_uint();
+            let msg_type = buf.unpack_uint();
+            match msg_type {
+                CALL => println!("CB not implemented yet"),
+                REPLY => {
+                    let mut pending = self.pending.lock().unwrap();
+                    let tx = pending.remove(&xid);
+                    drop(pending);
+                    match tx {
+                        None => println!("unmatched xid {}", xid),
+                        Some(tx) => { tx.send(buf); }
+                    }
+                }
+                _ => println!("corrupt packet msg_type={}", msg_type)
+            }
+
+        }
+    }
 }
 
 
 pub struct RpcClient {
     xid: u32,
-    connection: TcpStream,
-    pending: BTreeMap<u32, Box<dyn Fn () -> ()>>,
+    connection: tokio::sync::Mutex<WriteHalf<TcpStream>>,
+    pending: Arc<Mutex<BTreeMap<u32, oneshot::Sender<Bytes>>>>,
 }
 
 
-impl RpcClient{
+impl RpcClient {
     pub fn new(connection: TcpStream) -> RpcClient {
+        let (read, write) = tokio::io::split(connection);
+        let pending = Arc::new(Mutex::new(BTreeMap::new()));
+
+        let mut reader = RpcClientReceiver{
+            connection: read,
+            pending: pending.clone(),
+            max_size: MAX_PACKET_SIZE,
+        };
+
+        tokio::spawn(async move {
+            reader.run().await;
+        });
+
         RpcClient{
             xid: 1,
-            connection,
-            pending: BTreeMap::new()
+            connection: tokio::sync::Mutex::new(write),
+            pending,
         }
     }
 
@@ -172,13 +224,26 @@ impl RpcClient{
         self.xid
     }
 
-    pub async fn read_packet<B: BufMut>(&mut self, buf: &mut B, max_size: u32) -> io::Result<()> {
-        read_packet(&mut self.connection, buf, max_size).await
+//    pub async fn read_packet<BB: BufMut>(&mut self, buf: &mut BB, max_size: u32) -> io::Result<()> {
+//        read_packet(&mut self.connection, buf, max_size).await
+    //    }
+
+
+    pub async fn call(&mut self, buf : impl Buf, xid: u32) -> io::Result<Bytes> {
+        let (tx, rx) = oneshot::channel();
+        let mut pending = self.pending.lock().unwrap();
+        pending.insert(xid, tx);
+        drop(pending);
+
+        self.send(buf).await?;
+
+        rx.await.map_err(|_| io::ErrorKind::Other.into())
     }
 
-    pub async fn send<B: Buf>(&mut self, mut buf : B) -> io::Result<()> {
+    async fn send(&mut self, mut buf : impl Buf) -> io::Result<()> {
+        let mut connection = self.connection.lock().await;
         while buf.has_remaining() {
-            self.connection.write_buf(&mut buf).await?;
+            connection.write_buf(&mut buf).await?;
         }
 
         Ok(())

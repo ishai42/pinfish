@@ -6,11 +6,10 @@ use argh::FromArgs;
 use tokio::net::TcpStream;
 use std::error::Error;
 use rpc::Packer;
-use bytes::{Buf, BufMut};
+use bytes::{Buf};
 use crate::xdr::Packer as XdrPacker;
 use std::borrow::BorrowMut;
 
-const NFS_DEFAULT_PORT: u16 = 2049;
 
 #[derive(FromArgs)]
 /// Test NFS client
@@ -57,15 +56,9 @@ fn main() -> Result<(), Box<dyn Error>> {
                 (&mut borrow[0..4]).pack_uint(frag_size);
             }
 
-            client.send(buf.freeze()).await?;
-
-            println!("sent null");
-
-            let mut response_buf = bytes::BytesMut::new();
-            client.read_packet(&mut response_buf, 1024).await?;
+            let response_buf = client.call(buf.freeze(), xid).await?;
 
             println!("got response");
-            todo!();
 
             Ok(())
         })
