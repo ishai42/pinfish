@@ -1,5 +1,5 @@
 [package]
-name = "scratch"
+name = "pinfish"
 version = "0.1.0"
 edition = "2021"
 
@@ -10,4 +10,5 @@ edition = "2021"
 bytes = "1"
 tokio = { version = "1.21.0", features = ["full"] }
 argh = "0.1.8"
+pinfish-macros = { path = "../pinfish-macros", version = "0.1.0" }
 # async-channel??

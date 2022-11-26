@@ -1,12 +1,12 @@
 use crate::rpc::RpcClient;
-use tokio::net::{TcpStream};
+use tokio::net::TcpStream;
+pub mod ops;
 
 pub const PROG_NFS: u32 = 100003;
 
 struct Client {
     rpc: RpcClient,
 }
-
 
 impl Client {
     pub fn new(connection: TcpStream) -> Client {

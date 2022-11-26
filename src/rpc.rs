@@ -1,13 +1,12 @@
 use crate::xdr::{self, Unpacker};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use tokio::io::{self, AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
-use tokio::net::{TcpStream};
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
+use tokio::io::{self, AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
+use tokio::net::TcpStream;
 use tokio::sync::oneshot;
 
-
-const MAX_PACKET_SIZE: u32 = 1024*1024;
+const MAX_PACKET_SIZE: u32 = 1024 * 1024;
 
 // RFC5531  RPC v2
 
@@ -151,7 +150,6 @@ impl OpaqueAuth {
     }
 }
 
-
 struct RpcClientReceiver {
     connection: ReadHalf<TcpStream>,
     pending: Arc<Mutex<BTreeMap<u32, oneshot::Sender<Bytes>>>>,
@@ -179,16 +177,16 @@ impl RpcClientReceiver {
                     drop(pending);
                     match tx {
                         None => println!("unmatched xid {}", xid),
-                        Some(tx) => { tx.send(buf); }
+                        Some(tx) => {
+                            tx.send(buf);
+                        }
                     }
                 }
-                _ => println!("corrupt packet msg_type={}", msg_type)
+                _ => println!("corrupt packet msg_type={}", msg_type),
             }
-
         }
     }
 }
-
 
 pub struct RpcClient {
     xid: u32,
@@ -196,13 +194,12 @@ pub struct RpcClient {
     pending: Arc<Mutex<BTreeMap<u32, oneshot::Sender<Bytes>>>>,
 }
 
-
 impl RpcClient {
     pub fn new(connection: TcpStream) -> RpcClient {
         let (read, write) = tokio::io::split(connection);
         let pending = Arc::new(Mutex::new(BTreeMap::new()));
 
-        let mut reader = RpcClientReceiver{
+        let mut reader = RpcClientReceiver {
             connection: read,
             pending: pending.clone(),
             max_size: MAX_PACKET_SIZE,
@@ -212,7 +209,7 @@ impl RpcClient {
             reader.run().await;
         });
 
-        RpcClient{
+        RpcClient {
             xid: 1,
             connection: tokio::sync::Mutex::new(write),
             pending,
@@ -224,12 +221,11 @@ impl RpcClient {
         self.xid
     }
 
-//    pub async fn read_packet<BB: BufMut>(&mut self, buf: &mut BB, max_size: u32) -> io::Result<()> {
-//        read_packet(&mut self.connection, buf, max_size).await
+    //    pub async fn read_packet<BB: BufMut>(&mut self, buf: &mut BB, max_size: u32) -> io::Result<()> {
+    //        read_packet(&mut self.connection, buf, max_size).await
     //    }
 
-
-    pub async fn call(&mut self, buf : impl Buf, xid: u32) -> io::Result<Bytes> {
+    pub async fn call(&mut self, buf: impl Buf, xid: u32) -> io::Result<Bytes> {
         let (tx, rx) = oneshot::channel();
         let mut pending = self.pending.lock().unwrap();
         pending.insert(xid, tx);
@@ -240,7 +236,7 @@ impl RpcClient {
         rx.await.map_err(|_| io::ErrorKind::Other.into())
     }
 
-    async fn send(&mut self, mut buf : impl Buf) -> io::Result<()> {
+    async fn send(&mut self, mut buf: impl Buf) -> io::Result<()> {
         let mut connection = self.connection.lock().await;
         while buf.has_remaining() {
             connection.write_buf(&mut buf).await?;
@@ -249,4 +245,3 @@ impl RpcClient {
         Ok(())
     }
 }
-

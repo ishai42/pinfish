@@ -2,14 +2,13 @@ mod nfs4;
 mod rpc;
 mod xdr;
 
-use argh::FromArgs;
-use tokio::net::TcpStream;
-use std::error::Error;
-use rpc::Packer;
-use bytes::{Buf};
 use crate::xdr::Packer as XdrPacker;
+use argh::FromArgs;
+use bytes::Buf;
+use rpc::Packer;
 use std::borrow::BorrowMut;
-
+use std::error::Error;
+use tokio::net::TcpStream;
 
 #[derive(FromArgs)]
 /// Test NFS client
@@ -24,8 +23,7 @@ struct Command {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-
-    let cmd : Command = argh::from_env();
+    let cmd: Command = argh::from_env();
     let host_string = std::format!("{}:{}", cmd.host, cmd.port);
 
     tokio::runtime::Builder::new_multi_thread()
@@ -38,11 +36,17 @@ fn main() -> Result<(), Box<dyn Error>> {
             let mut client = rpc::RpcClient::new(connection);
             let mut buf = bytes::BytesMut::new();
             let xid = client.next_xid();
-            let header = rpc::CallHeader{
+            let header = rpc::CallHeader {
                 prog: nfs4::PROG_NFS,
                 vers: 4,
                 proc: 0,
-                cred: rpc::OpaqueAuth::new_sys(1, bytes::Bytes::from_static(b"blah"), 0, 0, Vec::new()),
+                cred: rpc::OpaqueAuth::new_sys(
+                    1,
+                    bytes::Bytes::from_static(b"blah"),
+                    0,
+                    0,
+                    Vec::new(),
+                ),
                 verf: rpc::OpaqueAuth::new_none(),
             };
 

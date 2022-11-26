@@ -1,6 +1,6 @@
+/// This module implements helper traits for packing and unpacking
+/// packets in XDR standard (RFC 4506)
 use bytes::{Buf, BufMut};
-
-// XDR RFC 4506
 
 const PAD_ZERO: [u8; 4] = [0; 4];
 
@@ -205,5 +205,72 @@ mod tests {
             buf.unpack_opaque().as_ref(),
             b"The quick brown fox jumps over the lazy dog"
         );
+    }
+}
+
+pub trait PackTo<B> {
+    fn pack_to(&self, buf: &mut B);
+}
+
+/// Allow generic Vec<T> implementation for the type
+trait VecPackTo {}
+
+macro_rules! impl_pack_to (
+    ($type:ty, $method:ident) => {
+        impl VecPackTo for $type {
+        }
+
+        impl<B: Packer> PackTo<B> for $type {
+            fn pack_to(&self, buf: &mut B) {
+                buf.$method(*self)
+            }
+        }
+    }
+);
+
+// Note: explicitly NOT implemented for u8 to allow trait implementation
+// for Vec<u8> and a generic Vec<T>.  XDR does not define encoding for "byte"
+// so it would have to be encoded as 4-byte unsigned int which is not what's
+// expected for a byte vector.
+impl_pack_to!(u32, pack_uint);
+impl_pack_to!(i32, pack_int);
+impl_pack_to!(i64, pack_hyper);
+impl_pack_to!(u64, pack_uhyper);
+impl_pack_to!(bool, pack_bool);
+impl_pack_to!(f32, pack_float);
+impl_pack_to!(f64, pack_double);
+impl_pack_to!(&str, pack_string);
+
+impl<B: Packer> PackTo<B> for String {
+    fn pack_to(&self, buf: &mut B) {
+        buf.pack_string(self);
+    }
+}
+
+impl<T: PackTo<B>, B: Packer> PackTo<B> for Option<T> {
+    fn pack_to(&self, buf: &mut B) {
+        match self {
+            Some(t) => {
+                buf.pack_bool(true);
+                t.pack_to(buf);
+            }
+            None => {
+                buf.pack_bool(false);
+            }
+        }
+    }
+}
+
+impl<B: Packer> PackTo<B> for Vec<u8> {
+    fn pack_to(&self, buf: &mut B) {
+        buf.pack_opaque(self);
+    }
+}
+
+impl<T: VecPackTo + PackTo<B>, B: Packer> PackTo<B> for Vec<T> {
+    fn pack_to(&self, buf: &mut B) {
+        let len = self.len() as u32;
+        buf.pack_uint(len);
+        self.iter().map(|item| item.pack_to(buf));
     }
 }
