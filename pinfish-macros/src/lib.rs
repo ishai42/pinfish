@@ -1,16 +1,32 @@
 use proc_macro2::{Span, TokenStream};
 use syn::spanned::Spanned;
+use quote::ToTokens;
 
 #[macro_use]
 extern crate quote;
 extern crate syn;
 
-#[proc_macro_derive(PackTo)]
+#[proc_macro_derive(PackTo, attributes(xdr))]
 pub fn derive_pack_to(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast = syn::parse_macro_input!(input as syn::DeriveInput);
     let gen = impl_pack_to(&ast);
     gen.into()
 }
+
+#[proc_macro_derive(VecPackTo)]
+pub fn derive_vec_pack_to(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+
+    let ast = syn::parse_macro_input!(input as syn::DeriveInput);
+    let name = ast.ident;
+    let span = Span::call_site();
+    let gen = quote_spanned!( span =>
+                              #[automatically_derived]
+                              impl VecPackTo for #name {}
+    );
+
+    gen.into()
+}
+
 
 /// Transform the input into a token stream containing any generated implementations,
 /// as well as all errors that occurred.
@@ -86,18 +102,108 @@ fn impl_pack_to_struct(
 fn impl_pack_to_enum(
     name: &syn::Ident,
     de: &syn::DataEnum,
-    _errors: &mut Vec<syn::Error>,
+    errors: &mut Vec<syn::Error>,
 ) -> TokenStream {
-    let span = de.brace_token.span;
 
+    let mut arms = Vec::new();
+    let mut discriminant = quote!(0);
+    let mut has_discriminants = false;
+
+    for variant in de.variants.iter() {
+
+        let n_from_attr = discriminant_from_attr(errors, &variant.attrs);
+        let n_from_discriminant = match &variant.discriminant {
+            None => None,
+            Some((_, expr)) => { has_discriminants = true; Some(expr.to_token_stream()) },
+        };
+
+        if n_from_attr.is_some() && has_discriminants {
+            errors.push(syn::Error::new(
+                de.enum_token.span(),
+                "`#![derive(PackTo)]` cannot mix custom discriminant and attribute based discriminant",
+            ));
+
+            continue;
+        }
+
+        discriminant = n_from_attr
+            .or(n_from_discriminant
+                .or(Some(discriminant))).unwrap();
+
+        let var_name = &variant.ident;
+        let span = variant.span();
+
+        let pack_inner;
+        let capture;
+        match &variant.fields {
+            syn::Fields::Unit => {
+                pack_inner = TokenStream::new();
+                capture = TokenStream::new();
+            }
+            syn::Fields::Unnamed(unnamed) => {
+                if unnamed.unnamed.len() != 1 {
+                    errors.push(syn::Error::new(
+                        unnamed.paren_token.span,
+                        "`#![derive(PackTo)]` enum variant cannot contain more than one field",
+                    ));
+
+                    continue;
+                }
+                capture = quote_spanned!( span => (inner) );
+                pack_inner = quote_spanned!( span => inner.pack_to(buf); )
+            }
+
+            syn::Fields::Named(named) => {
+                errors.push(syn::Error::new(
+                    named.brace_token.span,
+                    "`#![derive(PackTo)]` is not supported on tuple structs",
+                ));
+
+                continue;
+            }
+        };
+
+        arms.push(quote_spanned! { span => #name::#var_name #capture => {
+            buf.pack_uint(#discriminant);
+            #pack_inner
+        }, });
+
+        discriminant = quote!((#discriminant)+1);
+    }
+
+    if arms.len() == 0{
+        errors.push(syn::Error::new(
+            de.brace_token.span,
+            "`#![derive(PackTo)]` cannot derive for empty enum",
+        ));
+
+        return TokenStream::new();
+    }
+
+    let span = de.brace_token.span;
     return quote_spanned! { span =>
                             #[automatically_derived]
                             impl<B: xdr::Packer> xdr::PackTo<B> for #name {
                                 fn pack_to(&self, buf: &mut B) {
-                                    //#(
-                                        todo!();
-                                    //)*
+                                    match self {
+                                    #(
+                                        #arms
+                                    )*
+                                    }
                                 }
                             }
     };
+}
+
+fn discriminant_from_attr(errors: &mut Vec<syn::Error>, attrs: &Vec<syn::Attribute>) -> Option<TokenStream> {
+    for attr in attrs {
+        let segments = &attr.path.segments;
+        if segments.len() != 1 || segments[0].ident != "xdr" { continue; }
+        return match attr.parse_args::<syn::Expr>() {
+            Ok(expr) => Some(expr.to_token_stream()),
+            Err(e) => { errors.push(e); None }
+        }
+    }
+
+    None
 }

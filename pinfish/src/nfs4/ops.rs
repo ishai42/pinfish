@@ -1,6 +1,6 @@
 /// NFS4 Operations
-use crate::xdr::{self};
-use pinfish_macros::PackTo;
+use crate::xdr::{self, VecPackTo};
+use pinfish_macros::{PackTo, VecPackTo};
 
 const NFS4_SESSIONID_SIZE: usize = 16;
 
@@ -63,6 +63,7 @@ pub enum StateProtect4A {
     // TODO: Ssv
 }
 
+#[derive(PackTo, VecPackTo, Debug)]
 pub enum CallbackSecParams4 {
     AuthNone,
     // TODO : AuthSys
@@ -70,6 +71,7 @@ pub enum CallbackSecParams4 {
 }
 
 ///
+#[derive(PackTo, Debug)]
 pub struct Sequence4Args {
     pub SessionId: SessionId4,
     pub SequenceId: SequenceId4,
@@ -78,17 +80,19 @@ pub struct Sequence4Args {
     pub CacheThis: bool,
 }
 
+#[derive(PackTo, Debug)]
 pub struct ChannelAttrs4 {
-    HeaderPadSize: Count4,
-    MaxRequestSize: Count4,
-    MaxResponseSize: Count4,
-    MaxResponseSizeCached: Count4,
-    MaxOperation: Count4,
-    MaxRequests: Count4,
-    RdmaIrd: Option<u32>,
+    pub HeaderPadSize: Count4,
+    pub MaxRequestSize: Count4,
+    pub MaxResponseSize: Count4,
+    pub MaxResponseSizeCached: Count4,
+    pub MaxOperation: Count4,
+    pub MaxRequests: Count4,
+    pub RdmaIrd: Option<u32>,
 }
 
 /// 18.36 -- CREATE_SESSION4args
+#[derive(VecPackTo, PackTo, Debug)]
 pub struct CreateSession4Args {
     pub ClientId: ClientId4,
     pub Sequence: SequenceId4,
@@ -100,6 +104,30 @@ pub struct CreateSession4Args {
 
     pub CbProgram: u32,
     pub SecParams: Vec<CallbackSecParams4>,
+}
+
+#[derive(PackTo, Debug)]
+pub enum ArgOp4 {
+    CreateSession(CreateSession4Args),
+    Illegal
+}
+
+/// NFS4 COMPOUND args.
+pub struct Compound {
+    pub Tag: String,
+    pub MinorVersion: u32,
+    pub ArgArray: Vec<ArgOp4>
+}
+
+impl Compound {
+    /// Create a new empty compound for version 4.1
+    pub fn new() -> Compound {
+        Compound {
+            Tag: String::new(),
+            MinorVersion: 1,
+            ArgArray: Vec::new(),
+        }
+    }
 }
 
 impl NfsTime4 {
@@ -118,11 +146,3 @@ impl NfsTime4 {
     }
 }
 
-/*
-impl<B: Packer> PackTo<B> for NfsTime4 {
-    fn pack_to(&self, buf: &mut B) {
-        buf.pack_hyper(self.Seconds);
-        buf.pack_uint(self.NanoSeconds);
-    }
-}
-*/

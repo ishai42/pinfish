@@ -39,7 +39,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             let header = rpc::CallHeader {
                 prog: nfs4::PROG_NFS,
                 vers: 4,
-                proc: 0,
+                proc: nfs4::PROC_NULL,
                 cred: rpc::OpaqueAuth::new_sys(
                     1,
                     bytes::Bytes::from_static(b"blah"),
@@ -56,11 +56,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             let frag_size = (buf.remaining() - 4) as u32;
             let frag_size = frag_size | 0x80000000;
             {
-                let mut borrow: &mut [u8] = buf.borrow_mut();
+                let borrow: &mut [u8] = buf.borrow_mut();
                 (&mut borrow[0..4]).pack_uint(frag_size);
             }
 
-            let response_buf = client.call(buf.freeze(), xid).await?;
+            let _response_buf = client.call(buf.freeze(), xid).await?;
 
             println!("got response");
 

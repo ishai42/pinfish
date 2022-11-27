@@ -213,7 +213,7 @@ pub trait PackTo<B> {
 }
 
 /// Allow generic Vec<T> implementation for the type
-trait VecPackTo {}
+pub(crate) trait VecPackTo {}
 
 macro_rules! impl_pack_to (
     ($type:ty, $method:ident) => {
@@ -264,6 +264,12 @@ impl<T: PackTo<B>, B: Packer> PackTo<B> for Option<T> {
 impl<B: Packer> PackTo<B> for Vec<u8> {
     fn pack_to(&self, buf: &mut B) {
         buf.pack_opaque(self);
+    }
+}
+
+impl<B: Packer> PackTo<B> for [u8;16] {
+    fn pack_to(&self, buf: &mut B) {
+        buf.pack_opaque_fixed(self);
     }
 }
 
