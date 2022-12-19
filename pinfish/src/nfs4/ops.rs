@@ -1,5 +1,5 @@
 /// NFS4 Operations
-use crate::xdr::{self, VecPackUnpack, UnpackFrom, Unpacker};
+use crate::xdr::{self, UnpackFrom, Unpacker, VecPackUnpack};
 use pinfish_macros::{PackTo, UnpackFrom, VecPackUnpack};
 
 const OP_EXCHANGE_ID: u32 = 42;
@@ -186,7 +186,6 @@ pub enum ResultOp4 {
     ExchangeId(Result<ExchangeId4ResOk, u32>),
 }
 
-
 /// NFS4 COMPOUND result.
 #[derive(UnpackFrom, Debug)]
 pub struct CompoundResult {
@@ -195,8 +194,7 @@ pub struct CompoundResult {
     pub result_array: Vec<ResultOp4>,
 }
 
-
-impl<T : UnpackFrom<B>, B: Unpacker> UnpackFrom<B> for Result<T, u32> {
+impl<T: UnpackFrom<B>, B: Unpacker> UnpackFrom<B> for Result<T, u32> {
     fn unpack_from(buf: &mut B) -> Self {
         let n = u32::unpack_from(buf);
         match n {

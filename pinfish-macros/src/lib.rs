@@ -309,7 +309,7 @@ fn impl_unpack_from_enum(
     let mut consts = Vec::new();
     let mut discriminant = quote!(0);
     let mut has_discriminants = false;
-    let mut const_num : u32 = 0;
+    let mut const_num: u32 = 0;
 
     for variant in de.variants.iter() {
         let n_from_attr = discriminant_from_attr(errors, &variant.attrs);

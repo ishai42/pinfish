@@ -2,8 +2,8 @@ mod nfs4;
 mod rpc;
 mod xdr;
 
-use crate::xdr::{PackTo, UnpackFrom};
 use crate::xdr::Packer as XdrPacker;
+use crate::xdr::{PackTo, UnpackFrom};
 use argh::FromArgs;
 use bytes::Buf;
 use rpc::Packer;

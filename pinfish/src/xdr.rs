@@ -236,7 +236,6 @@ pub trait UnpackFrom<B> {
 /// if the traits are implemented for `T`
 pub(crate) trait VecPackUnpack {}
 
-
 macro_rules! impl_pack_to (
     ($type:ty, $method:ident) => {
         impl VecPackUnpack for $type {
@@ -317,7 +316,6 @@ impl<B: Packer> PackTo<B> for Bytes {
         buf.pack_opaque(self.as_ref());
     }
 }
-
 
 impl<B: Packer> PackTo<B> for [u8; 16] {
     fn pack_to(&self, buf: &mut B) {
