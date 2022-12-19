@@ -1,6 +1,6 @@
 /// This module implements helper traits for packing and unpacking
 /// packets in XDR standard (RFC 4506)
-use bytes::{Buf, BufMut};
+use bytes::{Buf, BufMut, Bytes};
 
 const PAD_ZERO: [u8; 4] = [0; 4];
 
@@ -111,6 +111,19 @@ pub trait Unpacker {
     fn unpack_opaque(&mut self) -> bytes::Bytes;
 
     fn unpack_opaque_fixed(&mut self, nbytes: usize) -> bytes::Bytes;
+
+    fn unpack_vec<I, F>(&mut self, unpack_fn: F) -> Vec<I>
+    where
+        F: Fn(&mut Self) -> I,
+    {
+        let len = self.unpack_uint() as usize;
+        let mut result = Vec::with_capacity(len);
+        for _ in 0..len {
+            result.push(unpack_fn(self));
+        }
+
+        result
+    }
 }
 
 impl<Buffer: Buf> Unpacker for Buffer {
@@ -208,21 +221,40 @@ mod tests {
     }
 }
 
+/// Trait that allows packing objects into a buffer.
 pub trait PackTo<B> {
+    /// Pack `self` into `buf`
     fn pack_to(&self, buf: &mut B);
 }
 
-/// Allow generic Vec<T> implementation for the type
-pub(crate) trait VecPackTo {}
+/// Trait that allows unpacking objects from a buffer
+pub trait UnpackFrom<B> {
+    fn unpack_from(buf: &mut B) -> Self;
+}
+
+/// Allow generic `Vec<T>` implementation of `PackTo` and `UnpackFrom` for the type
+/// if the traits are implemented for `T`
+pub(crate) trait VecPackUnpack {}
+
 
 macro_rules! impl_pack_to (
     ($type:ty, $method:ident) => {
-        impl VecPackTo for $type {
+        impl VecPackUnpack for $type {
         }
 
         impl<B: Packer> PackTo<B> for $type {
             fn pack_to(&self, buf: &mut B) {
                 buf.$method(*self)
+            }
+        }
+    }
+);
+
+macro_rules! impl_unpack_from (
+    ($type:ty, $method:ident) => {
+        impl<B: Unpacker> UnpackFrom<B> for $type {
+            fn unpack_from(buf: &mut B) -> Self {
+                buf.$method()
             }
         }
     }
@@ -240,6 +272,19 @@ impl_pack_to!(bool, pack_bool);
 impl_pack_to!(f32, pack_float);
 impl_pack_to!(f64, pack_double);
 impl_pack_to!(&str, pack_string);
+
+// Note: explicitly NOT implemented for u8 to allow trait implementation
+// for Vec<u8> and a generic Vec<T>.  XDR does not define encoding for "byte"
+// so it would have to be encoded as 4-byte unsigned int which is not what's
+// expected for a byte vector.
+impl_unpack_from!(u32, unpack_uint);
+impl_unpack_from!(i32, unpack_int);
+impl_unpack_from!(i64, unpack_hyper);
+impl_unpack_from!(u64, unpack_uhyper);
+impl_unpack_from!(bool, unpack_bool);
+impl_unpack_from!(f32, unpack_float);
+impl_unpack_from!(f64, unpack_double);
+impl_unpack_from!(bytes::Bytes, unpack_opaque);
 
 impl<B: Packer> PackTo<B> for String {
     fn pack_to(&self, buf: &mut B) {
@@ -267,16 +312,62 @@ impl<B: Packer> PackTo<B> for Vec<u8> {
     }
 }
 
-impl<B: Packer> PackTo<B> for [u8;16] {
+impl<B: Packer> PackTo<B> for Bytes {
+    fn pack_to(&self, buf: &mut B) {
+        buf.pack_opaque(self.as_ref());
+    }
+}
+
+
+impl<B: Packer> PackTo<B> for [u8; 16] {
     fn pack_to(&self, buf: &mut B) {
         buf.pack_opaque_fixed(self);
     }
 }
 
-impl<T: VecPackTo + PackTo<B>, B: Packer> PackTo<B> for Vec<T> {
+impl<T: std::fmt::Debug + VecPackUnpack + PackTo<B>, B: Packer> PackTo<B> for Vec<T> {
     fn pack_to(&self, buf: &mut B) {
         let len = self.len() as u32;
         buf.pack_uint(len);
-        self.iter().map(|item| item.pack_to(buf));
+        for item in self.iter() {
+            item.pack_to(buf);
+        }
+    }
+}
+
+impl<T: std::fmt::Debug + VecPackUnpack + UnpackFrom<B>, B: Unpacker> UnpackFrom<B> for Vec<T> {
+    fn unpack_from(buf: &mut B) -> Self {
+        let len = buf.unpack_uint() as usize;
+        let mut result = Vec::with_capacity(len.into());
+        for _ in 0..len {
+            result.push(T::unpack_from(buf))
+        }
+
+        result
+    }
+}
+
+impl<T: UnpackFrom<B>, B: Unpacker> UnpackFrom<B> for Option<T> {
+    fn unpack_from(buf: &mut B) -> Self {
+        let n = u32::unpack_from(buf);
+        match n {
+            0 => None,
+            1 => Some(T::unpack_from(buf)),
+            _ => todo!("error handling"),
+        }
+    }
+}
+
+impl<B: Unpacker> UnpackFrom<B> for Vec<u8> {
+    fn unpack_from(buf: &mut B) -> Self {
+        let bytes = buf.unpack_opaque();
+        bytes.into_iter().collect()
+    }
+}
+
+impl<B: Unpacker> UnpackFrom<B> for String {
+    fn unpack_from(buf: &mut B) -> Self {
+        let v = Vec::<u8>::unpack_from(buf);
+        String::from_utf8(v).unwrap()
     }
 }

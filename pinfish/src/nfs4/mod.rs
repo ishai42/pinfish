@@ -7,7 +7,6 @@ pub const PROG_NFS: u32 = 100003;
 pub const PROC_NULL: u32 = 0;
 pub const PROC_COMPOUND: u32 = 1;
 
-
 struct Client {
     rpc: RpcClient,
 }

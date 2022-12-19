@@ -1,10 +1,11 @@
-use crate::xdr::{self, Unpacker};
+use crate::xdr::{self, UnpackFrom, Unpacker as _};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use tokio::io::{self, AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
 use tokio::net::TcpStream;
 use tokio::sync::oneshot;
+use pinfish_macros::{PackTo, UnpackFrom};
 
 const MAX_PACKET_SIZE: u32 = 1024 * 1024;
 
@@ -17,6 +18,10 @@ const REPLY: u32 = 1;
 const AUTH_NONE: u32 = 0;
 const AUTH_SYS: u32 = 1;
 
+const MSG_ACCEPTED: u32 = 0;
+const MSG_DENIED: u32 = 1;
+
+#[derive(Debug)]
 pub struct AuthSys {
     pub stamp: u32,
     pub machine_name: Bytes,
@@ -26,10 +31,24 @@ pub struct AuthSys {
 }
 
 /// RFC5531 opaque_auth
+#[derive(Debug)]
 pub enum OpaqueAuth {
     None,
     Sys(AuthSys),
 }
+
+impl<B: Packer> xdr::PackTo<B> for OpaqueAuth {
+    fn pack_to(&self, buf: &mut B) {
+        buf.pack_auth(self);
+    }
+}
+
+impl<B: Unpacker> xdr::UnpackFrom<B> for OpaqueAuth {
+    fn unpack_from(buf: &mut B) -> Self {
+        buf.unpack_auth()
+    }
+}
+
 
 /// Corresponds to RFC5531 call_body.
 pub struct CallHeader {
@@ -40,6 +59,64 @@ pub struct CallHeader {
     pub cred: OpaqueAuth,
     pub verf: OpaqueAuth,
 }
+
+
+/// Corresponds to RFC5531 reply_body
+#[derive(UnpackFrom, PackTo, Debug)]
+pub enum ReplyHeader {
+    Accepted(AcceptedReply),
+    Denied(RejectedReply),
+}
+
+#[derive(UnpackFrom, PackTo, Debug)]
+pub struct AcceptedReply {
+    pub verf: OpaqueAuth,
+    pub stat: AcceptedReplyStat,
+}
+
+#[derive(UnpackFrom, PackTo, Debug)]
+pub enum AcceptedReplyStat {
+    Success,
+    ProgUnavail,
+    ProgMismatch(MismatchInfo),
+    ProcUnavail,
+    GarbageArgs,
+    SystemErr,
+}
+
+
+#[derive(PackTo, UnpackFrom, Debug)]
+pub struct MismatchInfo {
+    low: u32,
+    high: u32,
+}
+
+#[derive(PackTo, UnpackFrom, Debug)]
+pub enum AuthStat {
+    Ok,
+    BadCred,
+    RejectedCred,
+    BadVerf,
+    RejectedVerf,
+    TooWeak,
+    InvalidResp,
+    Failed,
+    KerbGeneric,
+    TimeExpire,
+    TktFile,
+    Decode,
+    NetAddr,
+    CredProblem,
+    CtxProblem
+}
+
+
+#[derive(PackTo, UnpackFrom, Debug)]
+pub enum RejectedReply  {
+    RpcMismatch(MismatchInfo),
+    AuthError(AuthStat),
+}
+
 
 /// Reads an RPC packet from `stream`, potentially comprised of
 /// multiple fragments into `buf`.  Allows at most
@@ -92,6 +169,14 @@ pub trait Packer {
     fn pack_auth_sys(&mut self, auth: &AuthSys);
 }
 
+/// Trait for unpacking RPC header
+pub trait Unpacker {
+    fn unpack_reply_header(&mut self) -> ReplyHeader;
+    fn unpack_auth(&mut self) -> OpaqueAuth;
+    fn unpack_auth_sys(&mut self) ->AuthSys;
+}
+
+
 impl<T: xdr::Packer> Packer for T {
     fn pack_call_header(&mut self, header: &CallHeader) {
         self.pack_uint(CALL);
@@ -125,6 +210,46 @@ impl<T: xdr::Packer> Packer for T {
         self.pack_array(&auth.gids, |packer: &mut Self, item| {
             packer.pack_uint(*item)
         });
+    }
+}
+
+impl<T: xdr::Unpacker> Unpacker for T {
+    fn unpack_reply_header(&mut self) -> ReplyHeader {
+        let reply_stat = self.unpack_uint();
+        match reply_stat {
+            MSG_ACCEPTED => ReplyHeader::Accepted(AcceptedReply::unpack_from(self)),
+            MSG_DENIED => ReplyHeader::Denied(RejectedReply::unpack_from(self)),
+            _ => todo!("error handling / handle invalid values")
+        }
+    }
+
+    fn unpack_auth(&mut self) -> OpaqueAuth {
+        let n = self.unpack_uint();
+        match n {
+            AUTH_NONE => {
+                let expect_zero = self.unpack_uint();
+                // TODO: handle as opaque and handle errors.
+                // Tenchically this is opaque and undefined but "recommended"
+                // that length is zero.
+                assert_eq!(expect_zero, 0);
+                OpaqueAuth::None
+            }
+            AUTH_SYS => {
+                OpaqueAuth::Sys(self.unpack_auth_sys())
+            }
+            _ => todo!("AUTH_SHORT and error handling")
+        }
+    }
+
+    fn unpack_auth_sys(&mut self) -> AuthSys {
+        let mut opaque : Bytes = self.unpack_opaque();
+        AuthSys {
+            stamp: opaque.unpack_uint(),
+            machine_name: opaque.unpack_opaque(),
+            uid: opaque.unpack_uint(),
+            gid: opaque.unpack_uint(),
+            gids: opaque.unpack_vec(|unpacker| { unpacker.unpack_uint() }),
+        }
     }
 }
 
