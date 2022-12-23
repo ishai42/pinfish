@@ -1,4 +1,7 @@
-use crate::xdr::{self, UnpackFrom, Unpacker as _};
+use crate::{
+    result::{ErrorCode, Result, INVALID_DATA},
+    xdr::{self, UnpackFrom, Unpacker as _},
+};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use pinfish_macros::{PackTo, UnpackFrom};
 use std::collections::BTreeMap;
@@ -44,7 +47,7 @@ impl<B: Packer> xdr::PackTo<B> for OpaqueAuth {
 }
 
 impl<B: Unpacker> xdr::UnpackFrom<B> for OpaqueAuth {
-    fn unpack_from(buf: &mut B) -> Self {
+    fn unpack_from(buf: &mut B) -> Result<Self> {
         buf.unpack_auth()
     }
 }
@@ -122,7 +125,7 @@ pub async fn read_packet<S: AsyncReadExt + Unpin, B: BufMut>(
     stream: &mut S,
     buf: &mut B,
     max_size: u32,
-) -> io::Result<()> {
+) -> Result<()> {
     assert!(buf.remaining_mut() >= max_size as usize);
 
     let mut record_mark_buf: [u8; 4] = [0; 4];
@@ -130,7 +133,7 @@ pub async fn read_packet<S: AsyncReadExt + Unpin, B: BufMut>(
     let mut len = 0;
     while !read_last {
         stream.read_exact(&mut record_mark_buf).await?;
-        let record_mark = record_mark_buf.as_ref().unpack_uint();
+        let record_mark = record_mark_buf.as_ref().unpack_uint()?;
         if (record_mark & LAST_FRAGMENT) != 0 {
             read_last = true;
         }
@@ -140,14 +143,14 @@ pub async fn read_packet<S: AsyncReadExt + Unpin, B: BufMut>(
             || fragment_size.wrapping_add(len) < fragment_size
             || fragment_size + len > max_size
         {
-            return Err(io::Error::from(io::ErrorKind::InvalidData));
+            return Err(ErrorCode::new(INVALID_DATA));
         }
 
         let mut lim_buf = buf.limit(fragment_size as usize);
         while lim_buf.remaining_mut() > 0 {
             let read = stream.read_buf(&mut lim_buf).await?;
             if read == 0 {
-                return Err(io::Error::from(io::ErrorKind::ConnectionAborted));
+                return Err(ErrorCode::new(INVALID_DATA));
             }
         }
 
@@ -166,9 +169,9 @@ pub trait Packer {
 
 /// Trait for unpacking RPC header
 pub trait Unpacker {
-    fn unpack_reply_header(&mut self) -> ReplyHeader;
-    fn unpack_auth(&mut self) -> OpaqueAuth;
-    fn unpack_auth_sys(&mut self) -> AuthSys;
+    fn unpack_reply_header(&mut self) -> Result<ReplyHeader>;
+    fn unpack_auth(&mut self) -> Result<OpaqueAuth>;
+    fn unpack_auth_sys(&mut self) -> Result<AuthSys>;
 }
 
 impl<T: xdr::Packer> Packer for T {
@@ -208,40 +211,43 @@ impl<T: xdr::Packer> Packer for T {
 }
 
 impl<T: xdr::Unpacker> Unpacker for T {
-    fn unpack_reply_header(&mut self) -> ReplyHeader {
-        let reply_stat = self.unpack_uint();
+    fn unpack_reply_header(&mut self) -> Result<ReplyHeader> {
+        let reply_stat = self.unpack_uint()?;
         match reply_stat {
-            MSG_ACCEPTED => ReplyHeader::Accepted(AcceptedReply::unpack_from(self)),
-            MSG_DENIED => ReplyHeader::Denied(RejectedReply::unpack_from(self)),
-            _ => todo!("error handling / handle invalid values"),
+            MSG_ACCEPTED => Ok(ReplyHeader::Accepted(AcceptedReply::unpack_from(self)?)),
+            MSG_DENIED => Ok(ReplyHeader::Denied(RejectedReply::unpack_from(self)?)),
+            _ => Err(INVALID_DATA.into())
         }
     }
 
-    fn unpack_auth(&mut self) -> OpaqueAuth {
-        let n = self.unpack_uint();
+    fn unpack_auth(&mut self) -> Result<OpaqueAuth> {
+        let n = self.unpack_uint()?;
         match n {
             AUTH_NONE => {
-                let expect_zero = self.unpack_uint();
-                // TODO: handle as opaque and handle errors.
-                // Tenchically this is opaque and undefined but "recommended"
-                // that length is zero.
-                assert_eq!(expect_zero, 0);
-                OpaqueAuth::None
+                let expect_zero = self.unpack_uint()?;
+                if expect_zero == 0 {
+                    // TODO: handle as opaque
+                    // Tenchically this is opaque and undefined but "recommended"
+                    // that length is zero.
+                    Err(INVALID_DATA.into())
+                } else {
+                    Ok(OpaqueAuth::None)
+                }
             }
-            AUTH_SYS => OpaqueAuth::Sys(self.unpack_auth_sys()),
-            _ => todo!("AUTH_SHORT and error handling"),
+            AUTH_SYS => Ok(OpaqueAuth::Sys(self.unpack_auth_sys()?)),
+            _ => Err(INVALID_DATA.into()),
         }
     }
 
-    fn unpack_auth_sys(&mut self) -> AuthSys {
-        let mut opaque: Bytes = self.unpack_opaque();
-        AuthSys {
-            stamp: opaque.unpack_uint(),
-            machine_name: opaque.unpack_opaque(),
-            uid: opaque.unpack_uint(),
-            gid: opaque.unpack_uint(),
-            gids: opaque.unpack_vec(|unpacker| unpacker.unpack_uint()),
-        }
+    fn unpack_auth_sys(&mut self) -> Result<AuthSys> {
+        let mut opaque: Bytes = self.unpack_opaque()?;
+        Ok(AuthSys {
+            stamp: opaque.unpack_uint()?,
+            machine_name: opaque.unpack_opaque()?,
+            uid: opaque.unpack_uint()?,
+            gid: opaque.unpack_uint()?,
+            gids: opaque.unpack_vec(|unpacker| unpacker.unpack_uint())?,
+        })
     }
 }
 
@@ -274,7 +280,7 @@ struct RpcClientReceiver {
 }
 
 impl RpcClientReceiver {
-    pub async fn run(&mut self) -> io::Result<()> {
+    pub async fn run(&mut self) -> Result<()> {
         loop {
             let mut buf = BytesMut::new();
             read_packet(&mut self.connection, &mut buf, self.max_size).await?;
@@ -284,8 +290,8 @@ impl RpcClientReceiver {
                 continue;
             }
 
-            let xid = buf.unpack_uint();
-            let msg_type = buf.unpack_uint();
+            let xid = buf.unpack_uint()?;
+            let msg_type = buf.unpack_uint()?;
             match msg_type {
                 CALL => println!("CB not implemented yet"),
                 REPLY => {

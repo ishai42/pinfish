@@ -289,12 +289,12 @@ fn impl_unpack_from_struct(
     return quote_spanned! { span =>
                             #[automatically_derived]
                             impl<B: xdr::Unpacker> xdr::UnpackFrom<B> for #name {
-                                fn unpack_from(buf: &mut B) -> Self {
-                                    #name {
+                                fn unpack_from(buf: &mut B) -> crate::result::Result<Self> {
+                                    Ok(#name {
                                         #(
-                                            #idents : <#types>::unpack_from(buf),
+                                            #idents : <#types>::unpack_from(buf)?,
                                         )*
-                                    }
+                                    })
                                 }
                             }
     };
@@ -352,7 +352,7 @@ fn impl_unpack_from_enum(
                     continue;
                 }
                 let inner_ty = &unnamed.unnamed.first().as_ref().unwrap().ty;
-                unpack_inner = quote_spanned!( span => ( <#inner_ty>::unpack_from(buf) ) );
+                unpack_inner = quote_spanned!( span => ( <#inner_ty>::unpack_from(buf)? ) );
             }
 
             syn::Fields::Named(named) => {
@@ -368,7 +368,7 @@ fn impl_unpack_from_enum(
         let varname = format_ident!("_CONST{}", const_num);
         const_num += 1;
         consts.push(quote_spanned! { span => const #varname : u32 = #discriminant; });
-        arms.push(quote_spanned! { span => #varname => { #name::#var_name #unpack_inner } });
+        arms.push(quote_spanned! { span => #varname => { Ok(#name::#var_name #unpack_inner) } });
 
         discriminant = quote!((#discriminant)+1);
     }
@@ -386,14 +386,14 @@ fn impl_unpack_from_enum(
     return quote_spanned! { span =>
                             #[automatically_derived]
                             impl<B: xdr::Unpacker> xdr::UnpackFrom<B> for #name {
-                                fn unpack_from(buf: &mut B) -> Self {
+                                fn unpack_from(buf: &mut B) -> crate::result::Result<Self> {
                                     #( #consts )*
-                                    let n = buf.unpack_uint();
+                                    let n = buf.unpack_uint()?;
                                     match n {
                                     #(
                                         #arms
                                     )*
-                                    _ => todo!("handle errors")
+                                    _ => Err(crate::result::INVALID_DATA.into())
                                     }
                                 }
                             }

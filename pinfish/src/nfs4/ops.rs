@@ -1,5 +1,8 @@
 /// NFS4 Operations
-use crate::xdr::{self, UnpackFrom, Unpacker, VecPackUnpack};
+use crate::{
+    xdr::{self, UnpackFrom, Unpacker, VecPackUnpack},
+    result::Result
+};
 use pinfish_macros::{PackTo, UnpackFrom, VecPackUnpack};
 
 const OP_EXCHANGE_ID: u32 = 42;
@@ -183,7 +186,7 @@ impl NfsTime4 {
 #[derive(UnpackFrom, Debug, VecPackUnpack)]
 pub enum ResultOp4 {
     #[xdr(OP_EXCHANGE_ID)]
-    ExchangeId(Result<ExchangeId4ResOk, u32>),
+    ExchangeId(core::result::Result<ExchangeId4ResOk, u32>),
 }
 
 /// NFS4 COMPOUND result.
@@ -194,12 +197,12 @@ pub struct CompoundResult {
     pub result_array: Vec<ResultOp4>,
 }
 
-impl<T: UnpackFrom<B>, B: Unpacker> UnpackFrom<B> for Result<T, u32> {
-    fn unpack_from(buf: &mut B) -> Self {
-        let n = u32::unpack_from(buf);
+impl<T: UnpackFrom<B>, B: Unpacker> UnpackFrom<B> for core::result::Result<T, u32> {
+    fn unpack_from(buf: &mut B) -> Result<Self> {
+        let n = u32::unpack_from(buf)?;
         match n {
-            0 => Ok(T::unpack_from(buf)),
-            _ => Err(n),
+            0 => Ok(Ok(T::unpack_from(buf)?)),
+            _ => Ok(Err(n)),
         }
     }
 }
