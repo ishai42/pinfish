@@ -216,7 +216,7 @@ impl<T: xdr::Unpacker> Unpacker for T {
         match reply_stat {
             MSG_ACCEPTED => Ok(ReplyHeader::Accepted(AcceptedReply::unpack_from(self)?)),
             MSG_DENIED => Ok(ReplyHeader::Denied(RejectedReply::unpack_from(self)?)),
-            _ => Err(INVALID_DATA.into())
+            _ => Err(INVALID_DATA.into()),
         }
     }
 

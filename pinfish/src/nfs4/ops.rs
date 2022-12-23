@@ -1,7 +1,7 @@
 /// NFS4 Operations
 use crate::{
+    result::Result,
     xdr::{self, UnpackFrom, Unpacker, VecPackUnpack},
-    result::Result
 };
 use pinfish_macros::{PackTo, UnpackFrom, VecPackUnpack};
 

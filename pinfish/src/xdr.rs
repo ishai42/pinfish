@@ -1,4 +1,4 @@
-use crate::result::{Result, NOT_ENOUGH_DATA, INVALID_DATA};
+use crate::result::{Result, INVALID_DATA, NOT_ENOUGH_DATA};
 /// This module implements helper traits for packing and unpacking
 /// packets in XDR standard (RFC 4506)
 use bytes::{Buf, BufMut, Bytes};
@@ -108,7 +108,7 @@ pub trait Unpacker {
         match self.unpack_uint()? {
             0 => Ok(false),
             1 => Ok(true),
-            _ => Err(INVALID_DATA.into())
+            _ => Err(INVALID_DATA.into()),
         }
     }
 
@@ -155,7 +155,6 @@ impl<Buffer: Buf> Unpacker for Buffer {
     unpack_impl!(unpack_float, f32, get_f32);
     unpack_impl!(unpack_double, f64, get_f64);
 
-
     #[inline]
     fn unpack_opaque(&mut self) -> Result<bytes::Bytes> {
         let len = self.unpack_uint()? as usize;
@@ -165,7 +164,7 @@ impl<Buffer: Buf> Unpacker for Buffer {
     #[inline]
     fn unpack_opaque_fixed(&mut self, nbytes: usize) -> Result<bytes::Bytes> {
         if self.remaining() < nbytes {
-            return Err(NOT_ENOUGH_DATA.into())
+            return Err(NOT_ENOUGH_DATA.into());
         }
 
         let ret = self.copy_to_bytes(nbytes);
@@ -227,7 +226,9 @@ pub trait PackTo<B> {
 
 /// Trait that allows unpacking objects from a buffer
 pub trait UnpackFrom<B> {
-    fn unpack_from(buf: &mut B) -> Result<Self> where Self: Sized;
+    fn unpack_from(buf: &mut B) -> Result<Self>
+    where
+        Self: Sized;
 }
 
 /// Allow generic `Vec<T>` implementation of `PackTo` and `UnpackFrom` for the type
