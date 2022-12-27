@@ -9,9 +9,9 @@ const OP_EXCHANGE_ID: u32 = 42;
 const OP_CREATE_SESSION: u32 = 43;
 const OP_ILLEGAL: u32 = 10044;
 
-const NFS4_session_id_SIZE: usize = 16;
+const NFS4_SESSION_ID_SIZE: usize = 16;
 
-pub type SessionId4 = [u8; NFS4_session_id_SIZE];
+pub type SessionId4 = [u8; NFS4_SESSION_ID_SIZE];
 pub type SequenceId4 = u32;
 pub type SlotId4 = u32;
 pub type ClientId4 = u64;
@@ -114,13 +114,13 @@ pub struct Sequence4Args {
 
 #[derive(PackTo, Debug)]
 pub struct ChannelAttrs4 {
-    pub HeaderPadSize: Count4,
-    pub MaxRequestSize: Count4,
-    pub MaxResponseSize: Count4,
-    pub MaxResponseSizeCached: Count4,
-    pub MaxOperation: Count4,
-    pub MaxRequests: Count4,
-    pub RdmaIrd: Option<u32>,
+    pub header_pad_size: Count4,
+    pub max_request_size: Count4,
+    pub max_response_size: Count4,
+    pub max_response_size_cached: Count4,
+    pub max_operation: Count4,
+    pub max_requests: Count4,
+    pub rdma_ird: Option<u32>,
 }
 
 /// 18.36 -- CREATE_SESSION4args

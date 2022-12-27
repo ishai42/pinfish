@@ -33,86 +33,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         .build()
         .unwrap()
         .block_on(async {
-            let connection = TcpStream::connect(host_string).await?;
+            let mut client = nfs4::client::NfsClient::new(&host_string);
+            client.connect().await?;
             println!("Connected");
-            let mut client = rpc::RpcClient::new(connection);
-            let mut buf = bytes::BytesMut::new();
-            let xid = client.next_xid();
-            let header = rpc::CallHeader {
-                prog: nfs4::PROG_NFS,
-                vers: 4,
-                proc: nfs4::PROC_NULL,
-                cred: rpc::OpaqueAuth::new_sys(
-                    1,
-                    bytes::Bytes::from_static(b"blah"),
-                    0,
-                    0,
-                    Vec::new(),
-                ),
-                verf: rpc::OpaqueAuth::new_none(),
-            };
+            client.null_call().await?;
+            println!("\n\ncompleted null call");
 
-            buf.pack_uint(0); // placeholder for frag
-            buf.pack_uint(xid);
-            buf.pack_call_header(&header);
-            let frag_size = (buf.remaining() - 4) as u32;
-            let frag_size = frag_size | 0x80000000;
-            {
-                let borrow: &mut [u8] = buf.borrow_mut();
-                (&mut borrow[0..4]).pack_uint(frag_size);
-            }
+            client.exchange_id_call().await?;
 
-            let _response_buf = client.call(buf.freeze(), xid).await?;
-
-            println!("got response for NULL");
-
-            let mut buf = bytes::BytesMut::new();
-            let xid = client.next_xid();
-            let header = rpc::CallHeader {
-                prog: nfs4::PROG_NFS,
-                vers: 4,
-                proc: nfs4::PROC_COMPOUND,
-                cred: rpc::OpaqueAuth::new_sys(
-                    1,
-                    bytes::Bytes::from_static(b"blah"),
-                    0,
-                    0,
-                    Vec::new(),
-                ),
-                verf: rpc::OpaqueAuth::new_none(),
-            };
-
-            buf.pack_uint(0); // placeholder for frag
-            buf.pack_uint(xid);
-            buf.pack_call_header(&header);
-
-            let mut compound = nfs4::ops::Compound::new();
-            compound
-                .arg_array
-                .push(nfs4::ops::ArgOp4::ExchangeId(nfs4::ops::ExchangeId4Args {
-                    client_owner: nfs4::ops::ClientOwner4 {
-                        verifier: 0,
-                        owner_id: Vec::from(*b"owner/id/string"),
-                    },
-                    flags: nfs4::ops::EXCHGID4_FLAG_USE_PNFS_MDS
-                        | nfs4::ops::EXCHGID4_FLAG_SUPP_MOVED_REFER,
-                    state_protect: nfs4::ops::StateProtect4A::None,
-                    client_impl_id: None,
-                }));
-
-            compound.pack_to(&mut buf);
-            let frag_size = (buf.remaining() - 4) as u32;
-            let frag_size = frag_size | 0x80000000;
-            {
-                let borrow: &mut [u8] = buf.borrow_mut();
-                (&mut borrow[0..4]).pack_uint(frag_size);
-            }
-
-            let mut response_buf = client.call(buf.freeze(), xid).await?;
-            let header = rpc::ReplyHeader::unpack_from(&mut response_buf);
-            let resp = nfs4::ops::CompoundResult::unpack_from(&mut response_buf);
-
-            println!("got response for EXCHANGE_ID {:?}//{:?}", header, resp);
+            println!("client_id = {:x}", client.client_id);
 
             Ok(())
         })

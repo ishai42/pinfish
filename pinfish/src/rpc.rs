@@ -1,16 +1,18 @@
 use crate::{
-    result::{ErrorCode, Result, INVALID_DATA},
+    result::{ErrorCode, Result, INVALID_DATA, RPC_PROG_UNAVAIL, RPC_PROG_MISMATCH, RPC_PROC_UNAVAIL, RPC_GARBAGE_ARGS, RPC_SYSTEM_ERR, RPC_REJECTED_MISMATCH, RPC_REJECTED_AUTH_ERROR},
     xdr::{self, UnpackFrom, Unpacker as _},
 };
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use pinfish_macros::{PackTo, UnpackFrom};
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, atomic::{self, AtomicU32}};
 use tokio::io::{self, AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
 use tokio::net::TcpStream;
 use tokio::sync::oneshot;
 
 const MAX_PACKET_SIZE: u32 = 1024 * 1024;
+
+
 
 // RFC5531  RPC v2
 
@@ -61,6 +63,14 @@ pub struct CallHeader {
     pub cred: OpaqueAuth,
     pub verf: OpaqueAuth,
 }
+
+impl<B: Packer> xdr::PackTo<B> for CallHeader {
+    #[inline]
+    fn pack_to(&self, buf: &mut B) {
+        buf.pack_call_header(self);
+    }
+}
+
 
 /// Corresponds to RFC5531 reply_body
 #[derive(UnpackFrom, PackTo, Debug)]
@@ -225,7 +235,7 @@ impl<T: xdr::Unpacker> Unpacker for T {
         match n {
             AUTH_NONE => {
                 let expect_zero = self.unpack_uint()?;
-                if expect_zero == 0 {
+                if expect_zero != 0 {
                     // TODO: handle as opaque
                     // Tenchically this is opaque and undefined but "recommended"
                     // that length is zero.
@@ -312,7 +322,6 @@ impl RpcClientReceiver {
 }
 
 pub struct RpcClient {
-    xid: u32,
     connection: tokio::sync::Mutex<WriteHalf<TcpStream>>,
     pending: Arc<Mutex<BTreeMap<u32, oneshot::Sender<Bytes>>>>,
 }
@@ -333,20 +342,22 @@ impl RpcClient {
         });
 
         RpcClient {
-            xid: 1,
             connection: tokio::sync::Mutex::new(write),
             pending,
         }
     }
 
-    pub fn next_xid(&mut self) -> u32 {
-        self.xid += 1;
-        self.xid
+    /// Returns a new xid (RPC transaction ID).
+    ///
+    /// According to the RFC:
+    /// "The "xid" field is only used for clients matching reply
+    /// messages with call messages or for servers detecting
+    /// retransmissions; the service side cannot treat this id as any
+    /// type of sequence number."
+    pub fn next_xid() -> u32 {
+        static XID : AtomicU32 = AtomicU32::new(0x58494430);
+        XID.fetch_add(1, atomic::Ordering::Relaxed)
     }
-
-    //    pub async fn read_packet<BB: BufMut>(&mut self, buf: &mut BB, max_size: u32) -> io::Result<()> {
-    //        read_packet(&mut self.connection, buf, max_size).await
-    //    }
 
     pub async fn call(&mut self, buf: impl Buf, xid: u32) -> io::Result<Bytes> {
         let (tx, rx) = oneshot::channel();
@@ -367,4 +378,29 @@ impl RpcClient {
 
         Ok(())
     }
+
+    pub fn check_header<B: Buf>(&mut self, buf: &mut B) -> Result<()> {
+        let header = ReplyHeader::unpack_from(buf)?;
+        match header {
+            ReplyHeader::Accepted(AcceptedReply{stat, ..}) => {
+                match stat {
+                    AcceptedReplyStat::Success => Ok(()),
+                    AcceptedReplyStat::ProgUnavail => Err(RPC_PROG_UNAVAIL.into()),
+                    AcceptedReplyStat::ProgMismatch(_) => Err(RPC_PROG_MISMATCH.into()),
+                    AcceptedReplyStat::ProcUnavail => Err(RPC_PROC_UNAVAIL.into()),
+                    AcceptedReplyStat::GarbageArgs => Err(RPC_GARBAGE_ARGS.into()),
+                    AcceptedReplyStat::SystemErr => Err(RPC_SYSTEM_ERR.into()),
+                }
+            },
+
+            ReplyHeader::Denied(denied) => {
+                match denied {
+                    RejectedReply::RpcMismatch(_) => Err(RPC_REJECTED_MISMATCH.into()),
+                    // TODO: unpack auth error
+                    RejectedReply::AuthError(_) => Err(RPC_REJECTED_AUTH_ERROR.into())
+                }
+            }
+        }
+    }
 }
+

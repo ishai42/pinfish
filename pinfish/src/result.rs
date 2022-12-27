@@ -22,11 +22,28 @@ impl ErrorCode {
     }
 }
 
+impl std::error::Error for ErrorCode {
+}
+
+impl std::fmt::Display for ErrorCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), core::fmt::Error> {
+        let n = self.0.get();
+        write!(f, "error: {} (0x{:x}", n, n)
+    }
+}
+
 impl From<u32> for ErrorCode {
     fn from(n: u32) -> ErrorCode {
         ErrorCode::new(if n == 0 { INTERNAL_ERROR } else { n })
     }
 }
+
+impl From<&u32> for ErrorCode {
+    fn from(n: &u32) -> ErrorCode {
+        (*n).into()
+    }
+}
+
 
 impl From<std::io::Error> for ErrorCode {
     fn from(err: std::io::Error) -> ErrorCode {
@@ -66,3 +83,11 @@ pub const NETWORK_UNREACHABLE: u32 = CRATE_ERROR_BASE + 5;
 pub const CONNECTION_ABORTED: u32 = CRATE_ERROR_BASE + 5;
 pub const NOT_CONNECTED: u32 = CRATE_ERROR_BASE + 6;
 pub const INVALID_DATA: u32 = CRATE_ERROR_BASE + 7;
+pub const RPC_PROG_UNAVAIL: u32 = CRATE_ERROR_BASE + 8;
+pub const RPC_PROG_MISMATCH: u32 = CRATE_ERROR_BASE + 9;
+pub const RPC_PROC_UNAVAIL: u32 = CRATE_ERROR_BASE + 10;
+pub const RPC_GARBAGE_ARGS: u32 = CRATE_ERROR_BASE + 11;
+pub const RPC_SYSTEM_ERR: u32 = CRATE_ERROR_BASE + 12;
+pub const RPC_REJECTED_MISMATCH: u32 = CRATE_ERROR_BASE + 13;
+pub const RPC_REJECTED_AUTH_ERROR: u32 = CRATE_ERROR_BASE + 14;
+
