@@ -1,7 +1,7 @@
 use crate::rpc::RpcClient;
 use tokio::net::TcpStream;
-pub mod ops;
 pub mod client;
+pub mod ops;
 pub const PROG_NFS: u32 = 100003;
 
 pub const PROC_NULL: u32 = 0;

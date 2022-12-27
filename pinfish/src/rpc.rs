@@ -1,18 +1,22 @@
 use crate::{
-    result::{ErrorCode, Result, INVALID_DATA, RPC_PROG_UNAVAIL, RPC_PROG_MISMATCH, RPC_PROC_UNAVAIL, RPC_GARBAGE_ARGS, RPC_SYSTEM_ERR, RPC_REJECTED_MISMATCH, RPC_REJECTED_AUTH_ERROR},
+    result::{
+        ErrorCode, Result, INVALID_DATA, RPC_GARBAGE_ARGS, RPC_PROC_UNAVAIL, RPC_PROG_MISMATCH,
+        RPC_PROG_UNAVAIL, RPC_REJECTED_AUTH_ERROR, RPC_REJECTED_MISMATCH, RPC_SYSTEM_ERR,
+    },
     xdr::{self, UnpackFrom, Unpacker as _},
 };
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use pinfish_macros::{PackTo, UnpackFrom};
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex, atomic::{self, AtomicU32}};
+use std::sync::{
+    atomic::{self, AtomicU32},
+    Arc, Mutex,
+};
 use tokio::io::{self, AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
 use tokio::net::TcpStream;
 use tokio::sync::oneshot;
 
 const MAX_PACKET_SIZE: u32 = 1024 * 1024;
-
-
 
 // RFC5531  RPC v2
 
@@ -70,7 +74,6 @@ impl<B: Packer> xdr::PackTo<B> for CallHeader {
         buf.pack_call_header(self);
     }
 }
-
 
 /// Corresponds to RFC5531 reply_body
 #[derive(UnpackFrom, PackTo, Debug)]
@@ -355,7 +358,7 @@ impl RpcClient {
     /// retransmissions; the service side cannot treat this id as any
     /// type of sequence number."
     pub fn next_xid() -> u32 {
-        static XID : AtomicU32 = AtomicU32::new(0x58494430);
+        static XID: AtomicU32 = AtomicU32::new(0x58494430);
         XID.fetch_add(1, atomic::Ordering::Relaxed)
     }
 
@@ -382,25 +385,22 @@ impl RpcClient {
     pub fn check_header<B: Buf>(&mut self, buf: &mut B) -> Result<()> {
         let header = ReplyHeader::unpack_from(buf)?;
         match header {
-            ReplyHeader::Accepted(AcceptedReply{stat, ..}) => {
-                match stat {
-                    AcceptedReplyStat::Success => Ok(()),
-                    AcceptedReplyStat::ProgUnavail => Err(RPC_PROG_UNAVAIL.into()),
-                    AcceptedReplyStat::ProgMismatch(_) => Err(RPC_PROG_MISMATCH.into()),
-                    AcceptedReplyStat::ProcUnavail => Err(RPC_PROC_UNAVAIL.into()),
-                    AcceptedReplyStat::GarbageArgs => Err(RPC_GARBAGE_ARGS.into()),
-                    AcceptedReplyStat::SystemErr => Err(RPC_SYSTEM_ERR.into()),
-                }
+            ReplyHeader::Accepted(AcceptedReply { stat, .. }) => match stat {
+                AcceptedReplyStat::Success => Ok(()),
+                AcceptedReplyStat::ProgUnavail => Err(RPC_PROG_UNAVAIL.into()),
+                AcceptedReplyStat::ProgMismatch(_) => Err(RPC_PROG_MISMATCH.into()),
+                AcceptedReplyStat::ProcUnavail => Err(RPC_PROC_UNAVAIL.into()),
+                AcceptedReplyStat::GarbageArgs => Err(RPC_GARBAGE_ARGS.into()),
+                AcceptedReplyStat::SystemErr => Err(RPC_SYSTEM_ERR.into()),
             },
 
             ReplyHeader::Denied(denied) => {
                 match denied {
                     RejectedReply::RpcMismatch(_) => Err(RPC_REJECTED_MISMATCH.into()),
                     // TODO: unpack auth error
-                    RejectedReply::AuthError(_) => Err(RPC_REJECTED_AUTH_ERROR.into())
+                    RejectedReply::AuthError(_) => Err(RPC_REJECTED_AUTH_ERROR.into()),
                 }
             }
         }
     }
 }
-

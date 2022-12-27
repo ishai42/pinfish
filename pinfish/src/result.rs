@@ -22,8 +22,7 @@ impl ErrorCode {
     }
 }
 
-impl std::error::Error for ErrorCode {
-}
+impl std::error::Error for ErrorCode {}
 
 impl std::fmt::Display for ErrorCode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), core::fmt::Error> {
@@ -43,7 +42,6 @@ impl From<&u32> for ErrorCode {
         (*n).into()
     }
 }
-
 
 impl From<std::io::Error> for ErrorCode {
     fn from(err: std::io::Error) -> ErrorCode {
@@ -90,4 +88,3 @@ pub const RPC_GARBAGE_ARGS: u32 = CRATE_ERROR_BASE + 11;
 pub const RPC_SYSTEM_ERR: u32 = CRATE_ERROR_BASE + 12;
 pub const RPC_REJECTED_MISMATCH: u32 = CRATE_ERROR_BASE + 13;
 pub const RPC_REJECTED_AUTH_ERROR: u32 = CRATE_ERROR_BASE + 14;
-

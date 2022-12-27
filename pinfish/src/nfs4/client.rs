@@ -1,7 +1,12 @@
-use bytes::{Bytes, BytesMut, Buf};
-use crate::{xdr::{Packer, PackTo, UnpackFrom}, rpc::{self, RpcClient}, nfs4::{self, ops::{ClientId4}}, result::{Result, NOT_CONNECTED, INVALID_DATA}};
-use tokio::net::TcpStream;
+use crate::{
+    nfs4::{self, ops::ClientId4},
+    result::{Result, INVALID_DATA, NOT_CONNECTED},
+    rpc::{self, RpcClient},
+    xdr::{PackTo, Packer, UnpackFrom},
+};
+use bytes::{Buf, Bytes, BytesMut};
 use std::borrow::BorrowMut;
+use tokio::net::TcpStream;
 
 pub struct NfsClient {
     /// Server address in host:port format
@@ -17,13 +22,12 @@ pub struct NfsClient {
 impl NfsClient {
     /// Consructs a new `NfsClient`
     pub fn new(server: &str) -> NfsClient {
-        NfsClient{
+        NfsClient {
             server: server.into(),
             rpc: None,
             client_id: 0,
         }
     }
-
 
     /// Connects the client
     pub async fn connect(&mut self) -> Result<()> {
@@ -38,13 +42,7 @@ impl NfsClient {
             prog: nfs4::PROG_NFS,
             vers: 4,
             proc,
-            cred: rpc::OpaqueAuth::new_sys(
-                1,
-                Bytes::from_static(b"blah"),
-                0,
-                0,
-                Vec::new(),
-            ),
+            cred: rpc::OpaqueAuth::new_sys(1, Bytes::from_static(b"blah"), 0, 0, Vec::new()),
             verf: rpc::OpaqueAuth::new_none(),
         }
     }
@@ -115,7 +113,7 @@ impl NfsClient {
             rpc.check_header(&mut response_buf)?;
             let resp = nfs4::ops::CompoundResult::unpack_from(&mut response_buf)?;
             if resp.status != nfs4::NFS4_OK {
-                return Err(resp.status.into())
+                return Err(resp.status.into());
             }
             if let Some(nfs4::ops::ResultOp4::ExchangeId(reply)) = resp.result_array.first() {
                 let reply = reply.as_ref()?;
@@ -129,5 +127,4 @@ impl NfsClient {
             Err(NOT_CONNECTED.into())
         }
     }
-
 }
