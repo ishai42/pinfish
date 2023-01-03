@@ -362,7 +362,7 @@ impl RpcClient {
         XID.fetch_add(1, atomic::Ordering::Relaxed)
     }
 
-    pub async fn call(&mut self, buf: impl Buf, xid: u32) -> io::Result<Bytes> {
+    pub async fn call(&self, buf: impl Buf, xid: u32) -> io::Result<Bytes> {
         let (tx, rx) = oneshot::channel();
         let mut pending = self.pending.lock().unwrap();
         pending.insert(xid, tx);
@@ -373,7 +373,7 @@ impl RpcClient {
         rx.await.map_err(|_| io::ErrorKind::Other.into())
     }
 
-    async fn send(&mut self, mut buf: impl Buf) -> io::Result<()> {
+    async fn send(&self, mut buf: impl Buf) -> io::Result<()> {
         let mut connection = self.connection.lock().await;
         while buf.has_remaining() {
             connection.write_buf(&mut buf).await?;
@@ -382,7 +382,7 @@ impl RpcClient {
         Ok(())
     }
 
-    pub fn check_header<B: Buf>(&mut self, buf: &mut B) -> Result<()> {
+    pub fn check_header<B: Buf>(&self, buf: &mut B) -> Result<()> {
         let header = ReplyHeader::unpack_from(buf)?;
         match header {
             ReplyHeader::Accepted(AcceptedReply { stat, .. }) => match stat {

@@ -59,6 +59,19 @@ impl From<std::io::Error> for ErrorCode {
     }
 }
 
+impl From<core::convert::Infallible> for ErrorCode {
+    fn from(_: core::convert::Infallible) -> ErrorCode {
+        // This is unreachable code
+        ErrorCode::new(INTERNAL_ERROR)
+    }
+}
+
+impl From<core::array::TryFromSliceError> for ErrorCode {
+    fn from(_: core::array::TryFromSliceError) -> ErrorCode {
+        ErrorCode::new(INTERNAL_ERROR)
+    }
+}
+
 impl From<std::string::FromUtf8Error> for ErrorCode {
     fn from(_err: std::string::FromUtf8Error) -> ErrorCode {
         INVALID_DATA.into()

@@ -7,6 +7,7 @@ use pinfish_macros::{PackTo, UnpackFrom, VecPackUnpack};
 
 const OP_EXCHANGE_ID: u32 = 42;
 const OP_CREATE_SESSION: u32 = 43;
+const OP_SEQUENCE: u32 = 53;
 const OP_ILLEGAL: u32 = 10044;
 
 const NFS4_SESSION_ID_SIZE: usize = 16;
@@ -102,7 +103,7 @@ pub enum CallbackSecParams4 {
     // TODO : RpcSecGss
 }
 
-///
+/// SEQUENCE
 #[derive(PackTo, Debug)]
 pub struct Sequence4Args {
     pub session_id: SessionId4,
@@ -112,7 +113,7 @@ pub struct Sequence4Args {
     pub cache_this: bool,
 }
 
-#[derive(PackTo, Debug)]
+#[derive(UnpackFrom, PackTo, Debug)]
 pub struct ChannelAttrs4 {
     pub header_pad_size: Count4,
     pub max_request_size: Count4,
@@ -122,6 +123,10 @@ pub struct ChannelAttrs4 {
     pub max_requests: Count4,
     pub rdma_ird: Option<u32>,
 }
+
+pub const CREATE_SESSION4_FLAG_PERSIST: u32 = 0x00000001;
+pub const CREATE_SESSION4_FLAG_CONN_BACK_CHAN: u32 = 0x00000002;
+pub const CREATE_SESSION4_FLAG_CONN_RDMA: u32 = 0x00000004;
 
 /// 18.36 -- CREATE_SESSION4args
 #[derive(VecPackUnpack, PackTo, Debug)]
@@ -138,12 +143,32 @@ pub struct CreateSession4Args {
     pub sec_params: Vec<CallbackSecParams4>,
 }
 
+
+
+
+#[derive(UnpackFrom, PackTo, Debug)]
+pub struct CreateSession4ResOk {
+    pub session_id: SessionId4,
+    pub sequence: SequenceId4,
+
+    pub flags: u32,
+
+    pub fore_chan_attrs: ChannelAttrs4,
+    pub back_chan_attrs: ChannelAttrs4,
+}
+
+
+
+// --------------
+
 #[derive(PackTo, Debug, VecPackUnpack)]
 pub enum ArgOp4 {
-    #[xdr(OP_EXCHANGE_ID)]
+    #[xdr(OP_EXCHANGE_ID)] // 42
     ExchangeId(ExchangeId4Args),
-    #[xdr(OP_CREATE_SESSION)]
+    #[xdr(OP_CREATE_SESSION)] // 43
     CreateSession(CreateSession4Args),
+    #[xdr(OP_SEQUENCE)] // 53
+    Sequence(Sequence4Args),
     #[xdr(OP_ILLEGAL)]
     Illegal,
 }
@@ -187,6 +212,8 @@ impl NfsTime4 {
 pub enum ResultOp4 {
     #[xdr(OP_EXCHANGE_ID)]
     ExchangeId(core::result::Result<ExchangeId4ResOk, u32>),
+    #[xdr(OP_CREATE_SESSION)]
+    CreateSession(core::result::Result<CreateSession4ResOk, u32>),
 }
 
 /// NFS4 COMPOUND result.

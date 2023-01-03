@@ -3,14 +3,8 @@ mod result;
 mod rpc;
 mod xdr;
 
-use crate::xdr::Packer as XdrPacker;
-use crate::xdr::{PackTo, UnpackFrom};
 use argh::FromArgs;
-use bytes::Buf;
-use rpc::Packer;
-use std::borrow::BorrowMut;
 use std::error::Error;
-use tokio::net::TcpStream;
 
 #[derive(FromArgs)]
 /// Test NFS client
@@ -41,7 +35,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             client.exchange_id_call().await?;
 
-            println!("client_id = {:x}", client.client_id);
+            println!("client_id = {:x}", client.client_id.get());
+
+            client.create_session_call().await?;
+
+            println!("session created");
 
             Ok(())
         })

@@ -195,24 +195,24 @@ mod tests {
 
         let mut buf = buf.freeze();
 
-        assert_eq!(buf.unpack_uint(), 0x01020304);
-        assert_eq!(buf.unpack_uhyper(), 0x0506070809101112);
-        assert_eq!(buf.unpack_int(), -1234567);
-        assert_eq!(buf.unpack_hyper(), -1234567890111213);
-        assert_eq!(buf.unpack_bool(), true);
-        assert_eq!(buf.unpack_bool(), false);
-        assert_eq!(buf.unpack_float(), 0.1234);
-        assert_eq!(buf.unpack_double(), 0.5678);
+        assert_eq!(buf.unpack_uint().unwrap(), 0x01020304);
+        assert_eq!(buf.unpack_uhyper().unwrap(), 0x0506070809101112);
+        assert_eq!(buf.unpack_int().unwrap(), -1234567);
+        assert_eq!(buf.unpack_hyper().unwrap(), -1234567890111213);
+        assert_eq!(buf.unpack_bool().unwrap(), true);
+        assert_eq!(buf.unpack_bool().unwrap(), false);
+        assert_eq!(buf.unpack_float().unwrap(), 0.1234);
+        assert_eq!(buf.unpack_double().unwrap(), 0.5678);
         assert_eq!(
-            buf.unpack_opaque_fixed(5).as_ref(),
+            buf.unpack_opaque_fixed(5).unwrap().as_ref(),
             &[0x14, 0x15, 0x16, 0x17, 0x18]
         );
         assert_eq!(
-            buf.unpack_opaque().as_ref(),
+            buf.unpack_opaque().unwrap().as_ref(),
             &[0x19, 0x20, 0x21, 0x22, 0x23]
         );
         assert_eq!(
-            buf.unpack_opaque().as_ref(),
+            buf.unpack_opaque().unwrap().as_ref(),
             b"The quick brown fox jumps over the lazy dog"
         );
     }
@@ -316,7 +316,7 @@ impl<B: Packer> PackTo<B> for Bytes {
     }
 }
 
-impl<B: Packer> PackTo<B> for [u8; 16] {
+impl<B: Packer, const LEN: usize> PackTo<B> for [u8; LEN] {
     fn pack_to(&self, buf: &mut B) {
         buf.pack_opaque_fixed(self);
     }
@@ -366,5 +366,11 @@ impl<B: Unpacker> UnpackFrom<B> for String {
     fn unpack_from(buf: &mut B) -> Result<Self> {
         let v = Vec::<u8>::unpack_from(buf)?;
         Ok(String::from_utf8(v)?)
+    }
+}
+
+impl<B: Unpacker, const LEN: usize> UnpackFrom<B> for [u8; LEN] {
+    fn unpack_from(buf: &mut B) -> Result<Self> {
+        Ok(buf.unpack_opaque_fixed(LEN)?.as_ref().try_into()?)
     }
 }
