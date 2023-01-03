@@ -1,6 +1,5 @@
+use std::sync::Mutex;
 use tokio::sync::{Semaphore, SemaphorePermit};
-use std::sync::{Mutex};
-
 
 /// Sequence and slot number for NFS4 SEQUENCE operation
 #[derive(Debug)]
@@ -8,7 +7,6 @@ pub struct SequenceInfo {
     pub slot: u32,
     pub sequence: u32,
 }
-
 
 /// Holds a slot and sequence number and releases them
 /// when dropped
@@ -31,7 +29,6 @@ impl<'a> core::ops::Drop for ClientSequence<'a> {
         self.owner.free_slot(self.info.slot)
     }
 }
-
 
 struct ClientSequencerInner {
     pub busy: Vec<u64>,
@@ -93,13 +90,12 @@ pub struct ClientSequencer {
     inner: Mutex<ClientSequencerInner>,
 }
 
-
 impl ClientSequencer {
     pub fn new(size: usize) -> Self {
         assert!(size > 0);
-        ClientSequencer{
+        ClientSequencer {
             sem: Semaphore::new(size),
-            inner: Mutex::new(ClientSequencerInner{
+            inner: Mutex::new(ClientSequencerInner {
                 busy: vec![0; (size + 63) / 64],
                 sequences: vec![0; size],
             }),
@@ -128,14 +124,13 @@ impl ClientSequencer {
         let sequence = inner.sequences[index];
         drop(inner);
 
-        ClientSequence{
-            info: dbg!(SequenceInfo{slot, sequence}),
+        ClientSequence {
+            info: dbg!(SequenceInfo { slot, sequence }),
             owner: &self,
             permit,
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -161,6 +156,5 @@ mod tests {
         let seq3 = sequencer.get_seq().await;
         assert_eq!(seq3.slot, 2);
         assert_eq!(seq3.sequence, 1);
-
     }
 }

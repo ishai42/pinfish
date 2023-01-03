@@ -143,9 +143,6 @@ pub struct CreateSession4Args {
     pub sec_params: Vec<CallbackSecParams4>,
 }
 
-
-
-
 #[derive(UnpackFrom, PackTo, Debug)]
 pub struct CreateSession4ResOk {
     pub session_id: SessionId4,
@@ -156,8 +153,6 @@ pub struct CreateSession4ResOk {
     pub fore_chan_attrs: ChannelAttrs4,
     pub back_chan_attrs: ChannelAttrs4,
 }
-
-
 
 // --------------
 

@@ -9,4 +9,3 @@ pub const PROC_NULL: u32 = 0;
 pub const PROC_COMPOUND: u32 = 1;
 
 pub const NFS4_OK: u32 = 0;
-

@@ -5,9 +5,9 @@ use crate::{
     xdr::{PackTo, Packer, UnpackFrom},
 };
 use bytes::{Buf, Bytes, BytesMut};
+use core::cell::Cell;
 use std::borrow::BorrowMut;
 use tokio::net::TcpStream;
-use core::cell::Cell;
 
 pub struct NfsClient {
     /// Server address in host:port format
@@ -33,7 +33,7 @@ impl NfsClient {
             rpc: None,
             client_id: Cell::new(0),
             sequence_id: Cell::new(0),
-            seq: ClientSequencer::new(64)
+            seq: ClientSequencer::new(64),
         }
     }
 
@@ -143,25 +143,24 @@ impl NfsClient {
         let mut buf = self.new_buf_with_call_header(xid, nfs4::PROC_COMPOUND);
         if let Some(rpc) = &self.rpc {
             let mut compound = nfs4::ops::Compound::new();
-            compound
-                .arg_array
-                .push(nfs4::ops::ArgOp4::CreateSession(nfs4::ops::CreateSession4Args {
+            compound.arg_array.push(nfs4::ops::ArgOp4::CreateSession(
+                nfs4::ops::CreateSession4Args {
                     client_id: self.client_id.get(),
                     sequence: self.sequence_id.get(),
                     flags: nfs4::ops::CREATE_SESSION4_FLAG_PERSIST,
-                    fore_chan_attrs: nfs4::ops::ChannelAttrs4{
+                    fore_chan_attrs: nfs4::ops::ChannelAttrs4 {
                         header_pad_size: 0,
                         max_request_size: 0x100800,
-                        max_response_size:  0x100800,
+                        max_response_size: 0x100800,
                         max_response_size_cached: 0x1800,
                         max_operation: 8,
                         max_requests: 64,
                         rdma_ird: None,
                     },
-                    back_chan_attrs: nfs4::ops::ChannelAttrs4{
+                    back_chan_attrs: nfs4::ops::ChannelAttrs4 {
                         header_pad_size: 0,
                         max_request_size: 0x1000,
-                        max_response_size:  0x1000,
+                        max_response_size: 0x1000,
                         max_response_size_cached: 0,
                         max_operation: 2,
                         max_requests: 16,
@@ -169,7 +168,8 @@ impl NfsClient {
                     },
                     cb_program: 0x40000000,
                     sec_params: vec![nfs4::ops::CallbackSecParams4::AuthNone],
-                }));
+                },
+            ));
 
             compound.pack_to(&mut buf);
 
@@ -193,6 +193,4 @@ impl NfsClient {
             Err(NOT_CONNECTED.into())
         }
     }
-
-
 }
