@@ -141,7 +141,6 @@ impl ClientSequencer {
     pub fn get_max(&self) -> u32 {
         self.inner.lock().unwrap().get_max() as u32
     }
-
 }
 
 #[cfg(test)]

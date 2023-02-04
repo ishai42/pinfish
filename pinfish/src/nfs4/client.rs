@@ -1,7 +1,8 @@
 use crate::{
-    nfs4::{self,
-           ops::{ClientId4, SequenceId4,SessionId4, NfsFh4 },
-           sequence::{ClientSequence, ClientSequencer},
+    nfs4::{
+        self,
+        ops::{ClientId4, NfsFh4, SequenceId4, SessionId4},
+        sequence::{ClientSequence, ClientSequencer},
     },
     result::{Result, INVALID_DATA, NOT_CONNECTED},
     rpc::{self, RpcClient},
@@ -10,8 +11,8 @@ use crate::{
 use bytes::{Buf, Bytes, BytesMut};
 use core::cell::Cell;
 use std::borrow::BorrowMut;
-use tokio::net::TcpStream;
 use std::collections::btree_map::BTreeMap;
+use tokio::net::TcpStream;
 
 #[derive(Default)]
 pub struct ClientFsDirNode {
@@ -27,7 +28,6 @@ pub enum ClientFsNode {
     File(ClientFsDirFileNode),
     Dir(ClientFsDirNode),
 }
-
 
 pub struct NfsClient {
     /// Server address in host:port format
@@ -61,7 +61,7 @@ impl NfsClient {
             sequence_id: Cell::new(0),
             session_id: Cell::new(Default::default()),
             seq: ClientSequencer::new(64),
-            root_node: std::sync::Mutex::new(Default::default())
+            root_node: std::sync::Mutex::new(Default::default()),
         }
     }
 
@@ -223,7 +223,7 @@ impl NfsClient {
     }
 
     fn new_sequence_op(&self, sequence: &ClientSequence, cache_this: bool) -> nfs4::ops::ArgOp4 {
-        nfs4::ops::ArgOp4::Sequence(nfs4::ops::Sequence4Args{
+        nfs4::ops::ArgOp4::Sequence(nfs4::ops::Sequence4Args {
             session_id: self.session_id.get(),
             sequence_id: sequence.info.sequence,
             slot_id: sequence.info.slot,
@@ -231,7 +231,6 @@ impl NfsClient {
             cache_this,
         })
     }
-
 
     /// Make a RECLAIM_COMPLETE call and process the result
     pub async fn send_reclaim_complete(&self) -> Result<()> {
@@ -241,8 +240,12 @@ impl NfsClient {
         if let Some(rpc) = &self.rpc {
             let mut compound = nfs4::ops::Compound::new();
             let sequence = self.seq.get_seq().await;
-            compound.arg_array.push(self.new_sequence_op(&sequence, false));
-            compound.arg_array.push(nfs4::ops::ArgOp4::ReclaimComplete(nfs4::ops::ReclaimComplete4Args{ one_fs: false }));
+            compound
+                .arg_array
+                .push(self.new_sequence_op(&sequence, false));
+            compound.arg_array.push(nfs4::ops::ArgOp4::ReclaimComplete(
+                nfs4::ops::ReclaimComplete4Args { one_fs: false },
+            ));
 
             compound.pack_to(&mut buf);
 
@@ -256,7 +259,6 @@ impl NfsClient {
 
             if let nfs4::ops::ResultOp4::ReclaimComplete(reply) = &resp.result_array[1] {
                 Ok((*reply)?)
-
             } else {
                 Err(INVALID_DATA.into())
             }
@@ -277,7 +279,9 @@ impl NfsClient {
         if let Some(rpc) = &self.rpc {
             let mut compound = nfs4::ops::Compound::new();
             let sequence = self.seq.get_seq().await;
-            compound.arg_array.push(self.new_sequence_op(&sequence, false));
+            compound
+                .arg_array
+                .push(self.new_sequence_op(&sequence, false));
             compound.arg_array.push(nfs4::ops::ArgOp4::PutRootFh);
             compound.arg_array.push(nfs4::ops::ArgOp4::GetFh);
 
@@ -295,7 +299,6 @@ impl NfsClient {
                 let mut root_node = self.root_node.lock().unwrap();
                 root_node.fh = reply.as_ref()?.object.clone();
                 Ok(root_node.fh.clone())
-
             } else {
                 Err(INVALID_DATA.into())
             }
@@ -303,7 +306,6 @@ impl NfsClient {
             Err(NOT_CONNECTED.into())
         }
     }
-
 
     /// Make a PUTFH | LOOKUP | GETFH call and process the result
     pub async fn send_lookup(&self, parent: &NfsFh4, name: &str) -> Result<NfsFh4> {
@@ -313,13 +315,19 @@ impl NfsClient {
         if let Some(rpc) = &self.rpc {
             let mut compound = nfs4::ops::Compound::new();
             let sequence = self.seq.get_seq().await;
-            compound.arg_array.push(self.new_sequence_op(&sequence, false));
-            compound.arg_array.push(nfs4::ops::ArgOp4::PutFh(nfs4::ops::PutFh4Args{
-                object: parent.clone(),
-            }));
-            compound.arg_array.push(nfs4::ops::ArgOp4::Lookup(nfs4::ops::Lookup4Args{
-                objname: name.into()
-            }));
+            compound
+                .arg_array
+                .push(self.new_sequence_op(&sequence, false));
+            compound
+                .arg_array
+                .push(nfs4::ops::ArgOp4::PutFh(nfs4::ops::PutFh4Args {
+                    object: parent.clone(),
+                }));
+            compound
+                .arg_array
+                .push(nfs4::ops::ArgOp4::Lookup(nfs4::ops::Lookup4Args {
+                    objname: name.into(),
+                }));
             compound.arg_array.push(nfs4::ops::ArgOp4::GetFh);
 
             compound.pack_to(&mut buf);
@@ -336,7 +344,6 @@ impl NfsClient {
                 let mut root_node = self.root_node.lock().unwrap();
                 root_node.fh = reply.as_ref()?.object.clone();
                 Ok(root_node.fh.clone())
-
             } else {
                 Err(INVALID_DATA.into())
             }
@@ -344,5 +351,4 @@ impl NfsClient {
             Err(NOT_CONNECTED.into())
         }
     }
-
 }

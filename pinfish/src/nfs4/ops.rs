@@ -143,7 +143,6 @@ pub struct PutFh4Args {
     pub object: NfsFh4,
 }
 
-
 #[derive(UnpackFrom, PackTo, Debug)]
 pub struct ChannelAttrs4 {
     pub header_pad_size: Count4,
@@ -187,7 +186,7 @@ pub struct CreateSession4ResOk {
 
 #[derive(UnpackFrom, PackTo, Debug)]
 pub struct ReclaimComplete4Args {
-    pub one_fs: bool
+    pub one_fs: bool,
 }
 
 #[derive(UnpackFrom, PackTo, Debug)]
@@ -199,7 +198,6 @@ pub struct GetFh4ResOk {
 
 #[derive(PackTo, Debug, VecPackUnpack)]
 pub enum ArgOp4 {
-
     #[xdr(OP_GETFH)] // 10
     GetFh,
 
@@ -265,7 +263,6 @@ impl NfsTime4 {
 
 #[derive(UnpackFrom, Debug, VecPackUnpack)]
 pub enum ResultOp4 {
-
     #[xdr(OP_GETFH)] // 10
     GetFh(core::result::Result<GetFh4ResOk, u32>),
 
@@ -281,7 +278,7 @@ pub enum ResultOp4 {
     #[xdr(OP_EXCHANGE_ID)] // 42
     ExchangeId(core::result::Result<ExchangeId4ResOk, u32>),
 
-    #[xdr(OP_CREATE_SESSION)]  // 43
+    #[xdr(OP_CREATE_SESSION)] // 43
     CreateSession(core::result::Result<CreateSession4ResOk, u32>),
 
     #[xdr(OP_SEQUENCE)] // 53
@@ -289,7 +286,6 @@ pub enum ResultOp4 {
 
     #[xdr(OP_RECLAIM_COMPLETE)] // 58
     ReclaimComplete(core::result::Result<(), u32>),
-
 
     #[xdr(OP_ILLEGAL)]
     Illegal(core::result::Result<(), u32>),
@@ -303,7 +299,9 @@ pub struct CompoundResult {
     pub result_array: Vec<ResultOp4>,
 }
 
-impl<T: core::fmt::Debug + UnpackFrom<B>, B: Unpacker> UnpackFrom<B> for core::result::Result<T, u32> {
+impl<T: core::fmt::Debug + UnpackFrom<B>, B: Unpacker> UnpackFrom<B>
+    for core::result::Result<T, u32>
+{
     fn unpack_from(buf: &mut B) -> Result<Self> {
         let n = u32::unpack_from(buf)?;
         match n {
