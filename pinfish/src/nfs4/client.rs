@@ -1,5 +1,8 @@
 use crate::{
-    nfs4::{self, ops::ClientId4, ops::SequenceId4, sequence::ClientSequencer},
+    nfs4::{self,
+           ops::{ClientId4, SequenceId4,SessionId4, NfsFh4 },
+           sequence::{ClientSequence, ClientSequencer},
+    },
     result::{Result, INVALID_DATA, NOT_CONNECTED},
     rpc::{self, RpcClient},
     xdr::{PackTo, Packer, UnpackFrom},
@@ -8,6 +11,23 @@ use bytes::{Buf, Bytes, BytesMut};
 use core::cell::Cell;
 use std::borrow::BorrowMut;
 use tokio::net::TcpStream;
+use std::collections::btree_map::BTreeMap;
+
+#[derive(Default)]
+pub struct ClientFsDirNode {
+    pub fh: NfsFh4,
+    pub children: BTreeMap<String, ClientFsNode>,
+}
+
+pub struct ClientFsDirFileNode {
+    pub fh: NfsFh4,
+}
+
+pub enum ClientFsNode {
+    File(ClientFsDirFileNode),
+    Dir(ClientFsDirNode),
+}
+
 
 pub struct NfsClient {
     /// Server address in host:port format
@@ -22,7 +42,13 @@ pub struct NfsClient {
     /// Sequence ID returned from EXCHANGE_ID
     pub sequence_id: Cell<SequenceId4>,
 
-    seq: ClientSequencer,
+    /// Session ID retruend from CREATE_SESSION
+    pub session_id: Cell<SessionId4>,
+
+    pub root_node: std::sync::Mutex<ClientFsDirNode>,
+
+    /// Generator for slot & sequence pairs.
+    pub seq: ClientSequencer,
 }
 
 impl NfsClient {
@@ -33,7 +59,9 @@ impl NfsClient {
             rpc: None,
             client_id: Cell::new(0),
             sequence_id: Cell::new(0),
+            session_id: Cell::new(Default::default()),
             seq: ClientSequencer::new(64),
+            root_node: std::sync::Mutex::new(Default::default())
         }
     }
 
@@ -106,7 +134,7 @@ impl NfsClient {
                 .push(nfs4::ops::ArgOp4::ExchangeId(nfs4::ops::ExchangeId4Args {
                     client_owner: nfs4::ops::ClientOwner4 {
                         verifier: 0,
-                        owner_id: Vec::from(*b"owner/id/string"),
+                        owner_id: Vec::from(*b"owner/id/string/2"),
                     },
                     flags: nfs4::ops::EXCHGID4_FLAG_USE_PNFS_MDS
                         | nfs4::ops::EXCHGID4_FLAG_SUPP_MOVED_REFER,
@@ -181,9 +209,9 @@ impl NfsClient {
                 return Err(resp.status.into());
             }
             if let Some(nfs4::ops::ResultOp4::CreateSession(reply)) = resp.result_array.first() {
-                let _reply = reply.as_ref()?;
+                let reply = reply.as_ref()?;
 
-                // TODO: either return the OK reply or record result for the session.
+                self.session_id.set(reply.session_id);
 
                 Ok(())
             } else {
@@ -193,4 +221,128 @@ impl NfsClient {
             Err(NOT_CONNECTED.into())
         }
     }
+
+    fn new_sequence_op(&self, sequence: &ClientSequence, cache_this: bool) -> nfs4::ops::ArgOp4 {
+        nfs4::ops::ArgOp4::Sequence(nfs4::ops::Sequence4Args{
+            session_id: self.session_id.get(),
+            sequence_id: sequence.info.sequence,
+            slot_id: sequence.info.slot,
+            highest_slot_id: self.seq.get_max(),
+            cache_this,
+        })
+    }
+
+
+    /// Make a RECLAIM_COMPLETE call and process the result
+    pub async fn send_reclaim_complete(&self) -> Result<()> {
+        let xid = RpcClient::next_xid();
+        let mut buf = self.new_buf_with_call_header(xid, nfs4::PROC_COMPOUND);
+
+        if let Some(rpc) = &self.rpc {
+            let mut compound = nfs4::ops::Compound::new();
+            let sequence = self.seq.get_seq().await;
+            compound.arg_array.push(self.new_sequence_op(&sequence, false));
+            compound.arg_array.push(nfs4::ops::ArgOp4::ReclaimComplete(nfs4::ops::ReclaimComplete4Args{ one_fs: false }));
+
+            compound.pack_to(&mut buf);
+
+            let buf = Self::finalize(buf);
+            let mut response_buf = rpc.call(buf, xid).await?;
+            rpc.check_header(&mut response_buf)?;
+            let resp = nfs4::ops::CompoundResult::unpack_from(&mut response_buf)?;
+            if resp.status != nfs4::NFS4_OK {
+                return Err(resp.status.into());
+            }
+
+            if let nfs4::ops::ResultOp4::ReclaimComplete(reply) = &resp.result_array[1] {
+                Ok((*reply)?)
+
+            } else {
+                Err(INVALID_DATA.into())
+            }
+        } else {
+            Err(NOT_CONNECTED.into())
+        }
+    }
+
+    fn get_root_fh(&self) -> NfsFh4 {
+        self.root_node.lock().unwrap().fh.clone()
+    }
+
+    /// Make a PUTROOTFH | GETFH call and process the result
+    pub async fn send_putrootfh(&self) -> Result<NfsFh4> {
+        let xid = RpcClient::next_xid();
+        let mut buf = self.new_buf_with_call_header(xid, nfs4::PROC_COMPOUND);
+
+        if let Some(rpc) = &self.rpc {
+            let mut compound = nfs4::ops::Compound::new();
+            let sequence = self.seq.get_seq().await;
+            compound.arg_array.push(self.new_sequence_op(&sequence, false));
+            compound.arg_array.push(nfs4::ops::ArgOp4::PutRootFh);
+            compound.arg_array.push(nfs4::ops::ArgOp4::GetFh);
+
+            compound.pack_to(&mut buf);
+
+            let buf = Self::finalize(buf);
+            let mut response_buf = rpc.call(buf, xid).await?;
+            rpc.check_header(&mut response_buf)?;
+            let resp = nfs4::ops::CompoundResult::unpack_from(&mut response_buf)?;
+            if resp.status != nfs4::NFS4_OK {
+                return Err(resp.status.into());
+            }
+            dbg!(&resp);
+            if let nfs4::ops::ResultOp4::GetFh(reply) = &resp.result_array[2] {
+                let mut root_node = self.root_node.lock().unwrap();
+                root_node.fh = reply.as_ref()?.object.clone();
+                Ok(root_node.fh.clone())
+
+            } else {
+                Err(INVALID_DATA.into())
+            }
+        } else {
+            Err(NOT_CONNECTED.into())
+        }
+    }
+
+
+    /// Make a PUTFH | LOOKUP | GETFH call and process the result
+    pub async fn send_lookup(&self, parent: &NfsFh4, name: &str) -> Result<NfsFh4> {
+        let xid = RpcClient::next_xid();
+        let mut buf = self.new_buf_with_call_header(xid, nfs4::PROC_COMPOUND);
+
+        if let Some(rpc) = &self.rpc {
+            let mut compound = nfs4::ops::Compound::new();
+            let sequence = self.seq.get_seq().await;
+            compound.arg_array.push(self.new_sequence_op(&sequence, false));
+            compound.arg_array.push(nfs4::ops::ArgOp4::PutFh(nfs4::ops::PutFh4Args{
+                object: parent.clone(),
+            }));
+            compound.arg_array.push(nfs4::ops::ArgOp4::Lookup(nfs4::ops::Lookup4Args{
+                objname: name.into()
+            }));
+            compound.arg_array.push(nfs4::ops::ArgOp4::GetFh);
+
+            compound.pack_to(&mut buf);
+
+            let buf = Self::finalize(buf);
+            let mut response_buf = rpc.call(buf, xid).await?;
+            rpc.check_header(&mut response_buf)?;
+            let resp = nfs4::ops::CompoundResult::unpack_from(&mut response_buf)?;
+            if resp.status != nfs4::NFS4_OK {
+                return Err(resp.status.into());
+            }
+
+            if let nfs4::ops::ResultOp4::GetFh(reply) = &resp.result_array[3] {
+                let mut root_node = self.root_node.lock().unwrap();
+                root_node.fh = reply.as_ref()?.object.clone();
+                Ok(root_node.fh.clone())
+
+            } else {
+                Err(INVALID_DATA.into())
+            }
+        } else {
+            Err(NOT_CONNECTED.into())
+        }
+    }
+
 }

@@ -9,9 +9,9 @@ pub struct SequenceInfo {
 }
 
 /// Holds a slot and sequence number and releases them
-/// when dropped
+/// when dropped.
 pub struct ClientSequence<'a> {
-    info: SequenceInfo,
+    pub info: SequenceInfo,
     owner: &'a ClientSequencer,
     permit: SemaphorePermit<'a>,
 }
@@ -65,6 +65,10 @@ impl ClientSequencerInner {
         self.busy[index] &= !bit;
     }
 
+    pub fn get_max(&self) -> usize {
+        self.sequences.len() - 1
+    }
+
     pub fn highest_used(&self) -> usize {
         for i in (0..self.busy.len()).rev() {
             if self.busy[i] != 0 {
@@ -91,6 +95,7 @@ pub struct ClientSequencer {
 }
 
 impl ClientSequencer {
+    /// Creates a new sequencer with `size` slots
     pub fn new(size: usize) -> Self {
         assert!(size > 0);
         ClientSequencer {
@@ -108,6 +113,8 @@ impl ClientSequencer {
         inner.free_slot(index);
     }
 
+    /// Asynchronously allocates a `ClientSequence` for NFS SEQUENCE
+    /// op used as part of COMPOUND call.
     pub async fn get_seq(&self) -> ClientSequence<'_> {
         // Acquire a permit, this must succeed because the semaphore is not
         // closed until dropped
@@ -130,6 +137,11 @@ impl ClientSequencer {
             permit,
         }
     }
+
+    pub fn get_max(&self) -> u32 {
+        self.inner.lock().unwrap().get_max() as u32
+    }
+
 }
 
 #[cfg(test)]

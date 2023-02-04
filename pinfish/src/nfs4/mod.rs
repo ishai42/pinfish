@@ -1,5 +1,3 @@
-use crate::rpc::RpcClient;
-use tokio::net::TcpStream;
 pub mod client;
 pub mod ops;
 pub mod sequence;

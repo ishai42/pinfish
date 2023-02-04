@@ -97,7 +97,7 @@ fn impl_pack_to_struct(
                                 fn pack_to(&self, buf: &mut B) {
                                     #(
                                         self.#fields . pack_to(buf);
-                                        println!("packing {:?}", self.#fields);
+                                        // println!("packing {:?}", self.#fields);
                                     )*
                                 }
                             }

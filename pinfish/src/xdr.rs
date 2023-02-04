@@ -374,3 +374,9 @@ impl<B: Unpacker, const LEN: usize> UnpackFrom<B> for [u8; LEN] {
         Ok(buf.unpack_opaque_fixed(LEN)?.as_ref().try_into()?)
     }
 }
+
+impl<B: Unpacker> UnpackFrom<B> for () {
+    fn unpack_from(_buf: &mut B) -> Result<Self> {
+        Ok(())
+    }
+}

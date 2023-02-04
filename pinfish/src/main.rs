@@ -41,6 +41,14 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             println!("session created");
 
+            client.send_reclaim_complete().await?;
+
+            println!("reclaim complete!");
+
+            let rootfh = client.send_putrootfh().await?;
+
+            println!("got rootfh {:?}", &rootfh);
+
             Ok(())
         })
 }

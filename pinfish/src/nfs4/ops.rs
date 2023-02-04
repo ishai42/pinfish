@@ -5,9 +5,14 @@ use crate::{
 };
 use pinfish_macros::{PackTo, UnpackFrom, VecPackUnpack};
 
+const OP_GETFH: u32 = 10;
+const OP_LOOKUP: u32 = 15;
+const OP_PUTFH: u32 = 22;
+const OP_PUTROOTFH: u32 = 24;
 const OP_EXCHANGE_ID: u32 = 42;
 const OP_CREATE_SESSION: u32 = 43;
 const OP_SEQUENCE: u32 = 53;
+const OP_RECLAIM_COMPLETE: u32 = 58;
 const OP_ILLEGAL: u32 = 10044;
 
 const NFS4_SESSION_ID_SIZE: usize = 16;
@@ -18,6 +23,8 @@ pub type SlotId4 = u32;
 pub type ClientId4 = u64;
 pub type Count4 = u32;
 pub type Verifier4 = u64; // really opaque[8]
+pub type NfsFh4 = Vec<u8>; // should be opaque<NFS4_FHSIZE>
+pub type Component4 = String;
 
 pub const EXCHGID4_FLAG_SUPP_MOVED_REFER: u32 = 0x00000001;
 pub const EXCHGID4_FLAG_SUPP_MOVED_MIGR: u32 = 0x00000002;
@@ -113,6 +120,30 @@ pub struct Sequence4Args {
     pub cache_this: bool,
 }
 
+/// SEQUENCE
+#[derive(UnpackFrom, PackTo, Debug)]
+pub struct Sequence4ResOk {
+    pub session_id: SessionId4,
+    pub sequence_id: SequenceId4,
+    pub slot_id: SlotId4,
+    pub highest_slot_id: SlotId4,
+    pub target_highest_slot_id: SlotId4,
+    pub status_flags: u32,
+}
+
+/// LOOKUP
+#[derive(PackTo, Debug)]
+pub struct Lookup4Args {
+    pub objname: Component4,
+}
+
+/// LOOKUP
+#[derive(PackTo, Debug)]
+pub struct PutFh4Args {
+    pub object: NfsFh4,
+}
+
+
 #[derive(UnpackFrom, PackTo, Debug)]
 pub struct ChannelAttrs4 {
     pub header_pad_size: Count4,
@@ -154,16 +185,45 @@ pub struct CreateSession4ResOk {
     pub back_chan_attrs: ChannelAttrs4,
 }
 
+#[derive(UnpackFrom, PackTo, Debug)]
+pub struct ReclaimComplete4Args {
+    pub one_fs: bool
+}
+
+#[derive(UnpackFrom, PackTo, Debug)]
+pub struct GetFh4ResOk {
+    pub object: NfsFh4,
+}
+
 // --------------
 
 #[derive(PackTo, Debug, VecPackUnpack)]
 pub enum ArgOp4 {
+
+    #[xdr(OP_GETFH)] // 10
+    GetFh,
+
+    #[xdr(OP_LOOKUP)] // 15
+    Lookup(Lookup4Args),
+
+    #[xdr(OP_PUTFH)] // 22
+    PutFh(PutFh4Args),
+
+    #[xdr(OP_PUTROOTFH)] // 24
+    PutRootFh,
+
     #[xdr(OP_EXCHANGE_ID)] // 42
     ExchangeId(ExchangeId4Args),
+
     #[xdr(OP_CREATE_SESSION)] // 43
     CreateSession(CreateSession4Args),
+
     #[xdr(OP_SEQUENCE)] // 53
     Sequence(Sequence4Args),
+
+    #[xdr(OP_RECLAIM_COMPLETE)] // 58
+    ReclaimComplete(ReclaimComplete4Args),
+
     #[xdr(OP_ILLEGAL)]
     Illegal,
 }
@@ -205,10 +265,34 @@ impl NfsTime4 {
 
 #[derive(UnpackFrom, Debug, VecPackUnpack)]
 pub enum ResultOp4 {
-    #[xdr(OP_EXCHANGE_ID)]
+
+    #[xdr(OP_GETFH)] // 10
+    GetFh(core::result::Result<GetFh4ResOk, u32>),
+
+    #[xdr(OP_LOOKUP)] // 15
+    Lookup(core::result::Result<(), u32>),
+
+    #[xdr(OP_PUTFH)] // 22
+    PutFh(core::result::Result<(), u32>),
+
+    #[xdr(OP_PUTROOTFH)] // 24
+    PutRootFh(core::result::Result<(), u32>),
+
+    #[xdr(OP_EXCHANGE_ID)] // 42
     ExchangeId(core::result::Result<ExchangeId4ResOk, u32>),
-    #[xdr(OP_CREATE_SESSION)]
+
+    #[xdr(OP_CREATE_SESSION)]  // 43
     CreateSession(core::result::Result<CreateSession4ResOk, u32>),
+
+    #[xdr(OP_SEQUENCE)] // 53
+    Sequence(core::result::Result<Sequence4ResOk, u32>),
+
+    #[xdr(OP_RECLAIM_COMPLETE)] // 58
+    ReclaimComplete(core::result::Result<(), u32>),
+
+
+    #[xdr(OP_ILLEGAL)]
+    Illegal(core::result::Result<(), u32>),
 }
 
 /// NFS4 COMPOUND result.
@@ -219,7 +303,7 @@ pub struct CompoundResult {
     pub result_array: Vec<ResultOp4>,
 }
 
-impl<T: UnpackFrom<B>, B: Unpacker> UnpackFrom<B> for core::result::Result<T, u32> {
+impl<T: core::fmt::Debug + UnpackFrom<B>, B: Unpacker> UnpackFrom<B> for core::result::Result<T, u32> {
     fn unpack_from(buf: &mut B) -> Result<Self> {
         let n = u32::unpack_from(buf)?;
         match n {
