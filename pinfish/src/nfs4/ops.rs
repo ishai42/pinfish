@@ -5,9 +5,14 @@ use crate::{
 };
 use pinfish_macros::{PackTo, UnpackFrom, VecPackUnpack};
 
+pub use super::attr::{FileAttributes, NfsType4, Bitmap4};
+
+
+const OP_CREATE: u32 = 6;
 const OP_GETFH: u32 = 10;
 const OP_LOOKUP: u32 = 15;
 const OP_PUTFH: u32 = 22;
+const OP_REMOVE: u32 = 28;
 const OP_PUTROOTFH: u32 = 24;
 const OP_EXCHANGE_ID: u32 = 42;
 const OP_CREATE_SESSION: u32 = 43;
@@ -25,6 +30,8 @@ pub type Count4 = u32;
 pub type Verifier4 = u64; // really opaque[8]
 pub type NfsFh4 = Vec<u8>; // should be opaque<NFS4_FHSIZE>
 pub type Component4 = String;
+pub type ChangeId4 = u64;
+
 
 pub const EXCHGID4_FLAG_SUPP_MOVED_REFER: u32 = 0x00000001;
 pub const EXCHGID4_FLAG_SUPP_MOVED_MIGR: u32 = 0x00000002;
@@ -194,10 +201,73 @@ pub struct GetFh4ResOk {
     pub object: NfsFh4,
 }
 
+/// device numbers for block/char special devices
+#[derive(PackTo, Debug)]
+pub struct SpecData4 {
+    major: u32,
+    minor: u32,
+}
+
+#[derive(PackTo, Debug)]
+pub enum CreateType4 {
+    /// Symbolic link
+    #[xdr(5)]
+    Link(String),
+    /// Block device
+    #[xdr(3)]
+    Block(SpecData4),
+    /// Char device
+    #[xdr(4)]
+    Char(SpecData4),
+    /// Socket
+    #[xdr(6)]
+    Socket,
+    /// FIFO
+    #[xdr(7)]
+    Fifo,
+    /// Directory
+    #[xdr(2)]
+    Directory
+}
+
+#[derive(PackTo, Debug)]
+pub struct Create4Args {
+    pub objtype: CreateType4,
+    pub component: String,
+    pub attributes: FileAttributes,
+}
+
+#[derive(UnpackFrom, PackTo, Debug)]
+pub struct ChangeInfo4 {
+    atomic: bool,
+    before: ChangeId4,
+    after: ChangeId4,
+}
+
+#[derive(UnpackFrom, PackTo, Debug)]
+pub struct Create4ResOk {
+    change_info: ChangeInfo4,
+    attr_set: Bitmap4
+}
+
+
+#[derive(PackTo, Debug)]
+pub struct Remove4Args {
+    pub target: Component4,
+}
+
+#[derive(UnpackFrom, PackTo, Debug)]
+pub struct Remove4ResOk {
+    change_info: ChangeInfo4,
+}
+
 // --------------
 
 #[derive(PackTo, Debug, VecPackUnpack)]
 pub enum ArgOp4 {
+    #[xdr(OP_CREATE)] // 6
+    Create(Create4Args),
+
     #[xdr(OP_GETFH)] // 10
     GetFh,
 
@@ -209,6 +279,9 @@ pub enum ArgOp4 {
 
     #[xdr(OP_PUTROOTFH)] // 24
     PutRootFh,
+
+    #[xdr(OP_REMOVE)] // 28
+    Remove(Remove4Args),
 
     #[xdr(OP_EXCHANGE_ID)] // 42
     ExchangeId(ExchangeId4Args),
@@ -263,6 +336,9 @@ impl NfsTime4 {
 
 #[derive(UnpackFrom, Debug, VecPackUnpack)]
 pub enum ResultOp4 {
+    #[xdr(OP_CREATE)] // 6
+    Create(core::result::Result<Create4ResOk, u32>),
+
     #[xdr(OP_GETFH)] // 10
     GetFh(core::result::Result<GetFh4ResOk, u32>),
 
@@ -274,6 +350,9 @@ pub enum ResultOp4 {
 
     #[xdr(OP_PUTROOTFH)] // 24
     PutRootFh(core::result::Result<(), u32>),
+
+    #[xdr(OP_REMOVE)] // 28
+    Remove(core::result::Result<Remove4ResOk, u32>),
 
     #[xdr(OP_EXCHANGE_ID)] // 42
     ExchangeId(core::result::Result<ExchangeId4ResOk, u32>),

@@ -45,6 +45,7 @@ pub struct NfsClient {
     /// Session ID retruend from CREATE_SESSION
     pub session_id: Cell<SessionId4>,
 
+    /// cached remote file and directory attributes
     pub root_node: std::sync::Mutex<ClientFsDirNode>,
 
     /// Generator for slot & sequence pairs.
@@ -294,7 +295,7 @@ impl NfsClient {
             if resp.status != nfs4::NFS4_OK {
                 return Err(resp.status.into());
             }
-            dbg!(&resp);
+
             if let nfs4::ops::ResultOp4::GetFh(reply) = &resp.result_array[2] {
                 let mut root_node = self.root_node.lock().unwrap();
                 root_node.fh = reply.as_ref()?.object.clone();
@@ -351,4 +352,121 @@ impl NfsClient {
             Err(NOT_CONNECTED.into())
         }
     }
+
+    /// Make a PUTFH | CREATE | GETFH call
+    pub async fn mkdir(&self, parent: &NfsFh4, name: &str) -> Result<NfsFh4> {
+        let xid = RpcClient::next_xid();
+        let mut buf = self.new_buf_with_call_header(xid, nfs4::PROC_COMPOUND);
+
+        if let Some(rpc) = &self.rpc {
+            let mut compound = nfs4::ops::Compound::new();
+            let mut attributes = nfs4::attr::FileAttributes::new();
+            attributes.mode = Some(0o775);
+            let sequence = self.seq.get_seq().await;
+            compound
+                .arg_array
+                .push(self.new_sequence_op(&sequence, false));
+            compound
+                .arg_array
+                .push(nfs4::ops::ArgOp4::PutFh(nfs4::ops::PutFh4Args {
+                    object: parent.clone(),
+                }));
+            compound
+                .arg_array
+                .push(nfs4::ops::ArgOp4::Create(nfs4::ops::Create4Args {
+                    objtype: nfs4::ops::CreateType4::Directory,
+                    component: name.into(),
+                    attributes,
+                }));
+            compound.arg_array.push(nfs4::ops::ArgOp4::GetFh);
+
+            compound.pack_to(&mut buf);
+
+            let buf = Self::finalize(buf);
+            let mut response_buf = rpc.call(buf, xid).await?;
+            rpc.check_header(&mut response_buf)?;
+            let resp = nfs4::ops::CompoundResult::unpack_from(&mut response_buf)?;
+            if resp.status != nfs4::NFS4_OK {
+                return Err(resp.status.into());
+            }
+
+            if let nfs4::ops::ResultOp4::GetFh(reply) = &resp.result_array[3] {
+                let mut root_node = self.root_node.lock().unwrap();
+                root_node.fh = reply.as_ref()?.object.clone();
+                Ok(root_node.fh.clone())
+            } else {
+                Err(INVALID_DATA.into())
+            }
+        } else {
+            Err(NOT_CONNECTED.into())
+        }
+    }
+
+    /// Make a PUTFH | REMOVE call and process the result
+    pub async fn remove(&self, parent: &NfsFh4, name: &str) -> Result<()> {
+        let xid = RpcClient::next_xid();
+        let mut buf = self.new_buf_with_call_header(xid, nfs4::PROC_COMPOUND);
+
+        if let Some(rpc) = &self.rpc {
+            let mut compound = nfs4::ops::Compound::new();
+            let sequence = self.seq.get_seq().await;
+            compound
+                .arg_array
+                .push(self.new_sequence_op(&sequence, false));
+            compound
+                .arg_array
+                .push(nfs4::ops::ArgOp4::PutFh(nfs4::ops::PutFh4Args {
+                    object: parent.clone(),
+                }));
+            compound
+                .arg_array
+                .push(nfs4::ops::ArgOp4::Remove(nfs4::ops::Remove4Args {
+                    target: name.into(),
+                }));
+
+            compound.pack_to(&mut buf);
+
+            let buf = Self::finalize(buf);
+            let mut response_buf = rpc.call(buf, xid).await?;
+            rpc.check_header(&mut response_buf)?;
+            let resp = nfs4::ops::CompoundResult::unpack_from(&mut response_buf)?;
+            if resp.status != nfs4::NFS4_OK {
+                return Err(resp.status.into());
+            }
+
+            if let nfs4::ops::ResultOp4::Remove(_) = &resp.result_array[2] {
+                Ok(())
+            } else {
+                Err(INVALID_DATA.into())
+            }
+        } else {
+            Err(NOT_CONNECTED.into())
+        }
+    }
+
+
+    /// Returns the root FH memory or from server.
+    pub async fn get_root(&self) -> Result<NfsFh4> {
+        let root = self.get_root_fh();
+        if root.len() > 0 {
+            Ok(root)
+        } else {
+            Ok(self.send_putrootfh().await?)
+        }
+    }
+
+    /// Resolves a path into FH, possibly using cached resolution
+    pub async fn resolve_path(&self, path: &str) -> Result<NfsFh4> {
+        let mut fh = self.get_root().await?;
+        if path.is_empty() {
+            return Ok(fh);
+        }
+
+        for component in path.split('/') {
+            fh = self.send_lookup(&fh, component).await?;
+        }
+
+        Ok(fh)
+    }
+
 }

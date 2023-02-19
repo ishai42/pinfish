@@ -16,6 +16,49 @@ struct Command {
     /// port, default is 2049
     #[argh(option, short = 'p', default = "2049")]
     port: u16,
+
+    #[argh(subcommand)]
+    cmd: Commands,
+}
+
+#[derive(FromArgs, PartialEq, Debug)]
+#[argh(subcommand)]
+enum Commands {
+    Lookup(Lookup),
+    Mkdir(Mkdir),
+    Remove(Remove),
+}
+
+/// Lookup path and print the resulting FH
+#[derive(FromArgs, PartialEq, Debug)]
+#[argh(subcommand, name = "lookup")]
+struct Lookup {
+    #[argh(positional)]
+    path: String,
+}
+
+/// Make a directory
+#[derive(FromArgs, PartialEq, Debug)]
+#[argh(subcommand, name = "mkdir")]
+struct Mkdir {
+    #[argh(positional)]
+    path: String,
+}
+
+/// Delete a file or a directory
+#[derive(FromArgs, PartialEq, Debug)]
+#[argh(subcommand, name = "remove")]
+struct Remove {
+    #[argh(positional)]
+    path: String,
+}
+
+
+fn split_last(path: &str) -> (&str, &str) {
+    match path.rsplit_once('/') {
+        None => ("", path),
+        Some(x) => x,
+    }
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -41,13 +84,28 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             println!("session created");
 
-            client.send_reclaim_complete().await?;
+//            client.send_reclaim_complete().await?;
 
-            println!("reclaim complete!");
+//            println!("reclaim complete!");
 
-            let rootfh = client.send_putrootfh().await?;
+            let (path, last) = match &cmd.cmd {
+                Commands::Lookup(lookup) => (lookup.path.as_str(), ""),
+                Commands::Mkdir(mkdir) => split_last(&mkdir.path),
+                Commands::Remove(remove) => split_last(&remove.path),
+            };
 
-            println!("got rootfh {:?}", &rootfh);
+            let fh = client.resolve_path(&path).await?;
+            println!("got fh {:?}", &fh);
+
+            match &cmd.cmd {
+                Commands::Lookup(_) => (),
+                Commands::Mkdir(_) => {
+                    let _fh = client.mkdir(&fh, last).await?;
+                }
+                Commands::Remove(_) => {
+                    client.remove(&fh, last).await?;
+                }
+            };
 
             Ok(())
         })

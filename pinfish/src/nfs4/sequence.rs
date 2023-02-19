@@ -132,7 +132,7 @@ impl ClientSequencer {
         drop(inner);
 
         ClientSequence {
-            info: dbg!(SequenceInfo { slot, sequence }),
+            info: SequenceInfo { slot, sequence },
             owner: &self,
             permit,
         }
