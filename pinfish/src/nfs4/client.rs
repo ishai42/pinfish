@@ -444,7 +444,6 @@ impl NfsClient {
         }
     }
 
-
     /// Returns the root FH memory or from server.
     pub async fn get_root(&self) -> Result<NfsFh4> {
         let root = self.get_root_fh();
@@ -468,5 +467,4 @@ impl NfsClient {
 
         Ok(fh)
     }
-
 }

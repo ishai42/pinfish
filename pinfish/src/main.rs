@@ -53,7 +53,6 @@ struct Remove {
     path: String,
 }
 
-
 fn split_last(path: &str) -> (&str, &str) {
     match path.rsplit_once('/') {
         None => ("", path),
@@ -84,9 +83,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             println!("session created");
 
-//            client.send_reclaim_complete().await?;
+            //            client.send_reclaim_complete().await?;
 
-//            println!("reclaim complete!");
+            //            println!("reclaim complete!");
 
             let (path, last) = match &cmd.cmd {
                 Commands::Lookup(lookup) => (lookup.path.as_str(), ""),

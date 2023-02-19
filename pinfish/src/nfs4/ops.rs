@@ -5,8 +5,7 @@ use crate::{
 };
 use pinfish_macros::{PackTo, UnpackFrom, VecPackUnpack};
 
-pub use super::attr::{FileAttributes, NfsType4, Bitmap4};
-
+pub use super::attr::{Bitmap4, FileAttributes, NfsType4};
 
 const OP_CREATE: u32 = 6;
 const OP_GETFH: u32 = 10;
@@ -31,7 +30,6 @@ pub type Verifier4 = u64; // really opaque[8]
 pub type NfsFh4 = Vec<u8>; // should be opaque<NFS4_FHSIZE>
 pub type Component4 = String;
 pub type ChangeId4 = u64;
-
 
 pub const EXCHGID4_FLAG_SUPP_MOVED_REFER: u32 = 0x00000001;
 pub const EXCHGID4_FLAG_SUPP_MOVED_MIGR: u32 = 0x00000002;
@@ -227,7 +225,7 @@ pub enum CreateType4 {
     Fifo,
     /// Directory
     #[xdr(2)]
-    Directory
+    Directory,
 }
 
 #[derive(PackTo, Debug)]
@@ -247,9 +245,8 @@ pub struct ChangeInfo4 {
 #[derive(UnpackFrom, PackTo, Debug)]
 pub struct Create4ResOk {
     change_info: ChangeInfo4,
-    attr_set: Bitmap4
+    attr_set: Bitmap4,
 }
-
 
 #[derive(PackTo, Debug)]
 pub struct Remove4Args {
