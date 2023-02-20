@@ -68,23 +68,23 @@ impl ClientSequencerInner {
     pub fn get_max(&self) -> usize {
         self.sequences.len() - 1
     }
-/*
-    pub fn highest_used(&self) -> usize {
-        for i in (0..self.busy.len()).rev() {
-            if self.busy[i] != 0 {
-                let first = self.busy[i].leading_zeros() as usize;
-                let result = i * 64 + first;
+    /*
+        pub fn highest_used(&self) -> usize {
+            for i in (0..self.busy.len()).rev() {
+                if self.busy[i] != 0 {
+                    let first = self.busy[i].leading_zeros() as usize;
+                    let result = i * 64 + first;
 
-                assert!(result < self.sequences.len());
+                    assert!(result < self.sequences.len());
 
-                return result;
+                    return result;
+                }
             }
-        }
 
-        // Should be unreachable as semaphore ensures a slot is available
-        panic!("no free slots");
-    }
-*/
+            // Should be unreachable as semaphore ensures a slot is available
+            panic!("no free slots");
+        }
+    */
 }
 
 /// Manages slots and sequence numbers for NFS client

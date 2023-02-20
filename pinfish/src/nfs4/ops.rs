@@ -336,7 +336,7 @@ pub struct OpenOwner4 {
 #[derive(PackTo, Debug)]
 pub enum OpenFlag4 {
     NoCreate,
-    Create(CreateHow4)
+    Create(CreateHow4),
 }
 
 #[derive(PackTo, Debug)]
@@ -349,9 +349,9 @@ pub enum CreateHow4 {
 #[derive(PackTo, Debug)]
 pub enum OpenClaim4 {
     Null(String),
-//    Previous(OpenDelegationType4),
-//    DelegateCur(OpenClaimDelegateCur4),
-//    DelegatePrev(String),
+    //    Previous(OpenDelegationType4),
+    //    DelegateCur(OpenClaimDelegateCur4),
+    //    DelegatePrev(String),
 }
 
 #[derive(PackTo, Debug)]
