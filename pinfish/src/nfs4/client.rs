@@ -1,7 +1,8 @@
 use crate::{
     nfs4::{
         self,
-        ops::{ClientId4, NfsFh4, SequenceId4, SessionId4},
+        attr::{self, Bitmap4},
+        ops::{ClientId4, Cookie4, NfsFh4, ReadDir4ResOk, SequenceId4, SessionId4, Verifier4},
         sequence::{ClientSequence, ClientSequencer},
     },
     result::{Result, INVALID_DATA, NOT_CONNECTED},
@@ -436,6 +437,65 @@ impl NfsClient {
 
             if let nfs4::ops::ResultOp4::Remove(_) = &resp.result_array[2] {
                 Ok(())
+            } else {
+                Err(INVALID_DATA.into())
+            }
+        } else {
+            Err(NOT_CONNECTED.into())
+        }
+    }
+
+    /// Make a PUTFH | READDIR call and return the result
+    pub async fn readdir(
+        &self,
+        dir: &NfsFh4,
+        cookie: Cookie4,
+        verifier: Verifier4,
+    ) -> Result<ReadDir4ResOk> {
+        let xid = RpcClient::next_xid();
+        let mut buf = self.new_buf_with_call_header(xid, nfs4::PROC_COMPOUND);
+
+        let mut attr_request = Bitmap4::new();
+        attr_request.set(attr::TYPE);
+        attr_request.set(attr::SIZE);
+        attr_request.set(attr::MODE);
+        attr_request.set(attr::OWNER);
+
+        if let Some(rpc) = &self.rpc {
+            let mut compound = nfs4::ops::Compound::new();
+            let sequence = self.seq.get_seq().await;
+            compound
+                .arg_array
+                .push(self.new_sequence_op(&sequence, false));
+            compound
+                .arg_array
+                .push(nfs4::ops::ArgOp4::PutFh(nfs4::ops::PutFh4Args {
+                    object: dir.clone(),
+                }));
+            compound
+                .arg_array
+                .push(nfs4::ops::ArgOp4::ReadDir(nfs4::ops::ReadDir4Args {
+                    cookie,
+                    verifier,
+                    dir_count: 8170,
+                    max_count: 32680,
+                    attr_request,
+                }));
+
+            compound.pack_to(&mut buf);
+
+            let buf = Self::finalize(buf);
+            let mut response_buf = rpc.call(buf, xid).await?;
+            rpc.check_header(&mut response_buf)?;
+            let mut resp = nfs4::ops::CompoundResult::unpack_from(&mut response_buf)?;
+            if resp.status != nfs4::NFS4_OK {
+                return Err(resp.status.into());
+            }
+
+            if let nfs4::ops::ResultOp4::ReadDir(reply) = &mut resp.result_array[2] {
+                let mut readdir = Err(crate::result::INTERNAL_ERROR);
+                std::mem::swap(&mut *reply, &mut readdir);
+                Ok(readdir?)
             } else {
                 Err(INVALID_DATA.into())
             }

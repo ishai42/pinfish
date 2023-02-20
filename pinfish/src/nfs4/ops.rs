@@ -11,6 +11,7 @@ const OP_CREATE: u32 = 6;
 const OP_GETFH: u32 = 10;
 const OP_LOOKUP: u32 = 15;
 const OP_PUTFH: u32 = 22;
+const OP_READDIR: u32 = 26;
 const OP_REMOVE: u32 = 28;
 const OP_PUTROOTFH: u32 = 24;
 const OP_EXCHANGE_ID: u32 = 42;
@@ -20,6 +21,8 @@ const OP_RECLAIM_COMPLETE: u32 = 58;
 const OP_ILLEGAL: u32 = 10044;
 
 const NFS4_SESSION_ID_SIZE: usize = 16;
+// const NFS4_VERIFIER_SIZE: usize = 8;
+const NFS4_OTHER_SIZE: usize = 12;
 
 pub type SessionId4 = [u8; NFS4_SESSION_ID_SIZE];
 pub type SequenceId4 = u32;
@@ -30,6 +33,7 @@ pub type Verifier4 = u64; // really opaque[8]
 pub type NfsFh4 = Vec<u8>; // should be opaque<NFS4_FHSIZE>
 pub type Component4 = String;
 pub type ChangeId4 = u64;
+pub type Cookie4 = u64;
 
 pub const EXCHGID4_FLAG_SUPP_MOVED_REFER: u32 = 0x00000001;
 pub const EXCHGID4_FLAG_SUPP_MOVED_MIGR: u32 = 0x00000002;
@@ -44,6 +48,15 @@ pub const EXCHGID4_FLAG_MASK_PNFS: u32 = 0x00070000;
 
 pub const EXCHGID4_FLAG_UPD_CONFIRMED_REC_A: u32 = 0x40000000;
 pub const EXCHGID4_FLAG_CONFIRMED_R: u32 = 0x80000000;
+
+pub const OPEN4_SHARE_ACCESS_READ: u32 = 0x00000001;
+pub const OPEN4_SHARE_ACCESS_WRITE: u32 = 0x00000002;
+pub const OPEN4_SHARE_ACCESS_BOTH: u32 = 0x00000003;
+
+pub const OPEN4_SHARE_DENY_NONE: u32 = 0x00000000;
+pub const OPEN4_SHARE_DENY_READ: u32 = 0x00000001;
+pub const OPEN4_SHARE_DENY_WRITE: u32 = 0x00000002;
+pub const OPEN4_SHARE_DENY_BOTH: u32 = 0x00000003;
 
 /// The NfsTime4 gives the number of seconds and nano seconds since
 /// midnight or zero hour January 1, 1970 Coordinated Universal Time
@@ -142,7 +155,7 @@ pub struct Lookup4Args {
     pub objname: Component4,
 }
 
-/// LOOKUP
+/// PUTFH
 #[derive(PackTo, Debug)]
 pub struct PutFh4Args {
     pub object: NfsFh4,
@@ -255,7 +268,122 @@ pub struct Remove4Args {
 
 #[derive(UnpackFrom, PackTo, Debug)]
 pub struct Remove4ResOk {
+    pub change_info: ChangeInfo4,
+}
+
+#[derive(PackTo, Debug)]
+pub struct ReadDir4Args {
+    pub cookie: Cookie4,
+    pub verifier: Verifier4,
+    pub dir_count: Count4,
+    pub max_count: Count4,
+    pub attr_request: Bitmap4,
+}
+
+#[derive(UnpackFrom, PackTo, Debug)]
+pub struct Entry4 {
+    pub cookie: Cookie4,
+    pub name: Component4,
+    pub attrs: FileAttributes,
+    pub next_entry: Option<Box<Entry4>>,
+}
+
+#[derive(UnpackFrom, PackTo, Debug)]
+pub struct DirList4 {
+    pub entries: Option<Entry4>,
+    pub eof: bool,
+}
+
+/// Iterator for directory entries
+pub struct Entry4Iter<'a> {
+    next: Option<&'a Entry4>,
+}
+
+impl<'a> Iterator for Entry4Iter<'a> {
+    type Item = &'a Entry4;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(entry) = self.next {
+            self.next = entry.next_entry.as_ref().map(|e| &**e);
+            Some(entry)
+        } else {
+            None
+        }
+    }
+}
+
+impl DirList4 {
+    /// Iterate over directory entries
+    pub fn iter(&self) -> Entry4Iter<'_> {
+        Entry4Iter {
+            next: self.entries.as_ref(),
+        }
+    }
+}
+
+#[derive(UnpackFrom, PackTo, Debug)]
+pub struct ReadDir4ResOk {
+    pub cookie_verf: Verifier4,
+    pub reply: DirList4,
+}
+
+#[derive(PackTo, Debug)]
+pub struct OpenOwner4 {
+    pub client_id: ClientId4,
+    pub owner: bytes::Bytes,
+}
+
+#[derive(PackTo, Debug)]
+pub enum OpenFlag4 {
+    NoCreate,
+    Create(CreateHow4)
+}
+
+#[derive(PackTo, Debug)]
+pub enum CreateHow4 {
+    Unchecked(FileAttributes),
+    Guarded(FileAttributes),
+    Exclusive(Verifier4),
+}
+
+#[derive(PackTo, Debug)]
+pub enum OpenClaim4 {
+    Null(String),
+//    Previous(OpenDelegationType4),
+//    DelegateCur(OpenClaimDelegateCur4),
+//    DelegatePrev(String),
+}
+
+#[derive(PackTo, Debug)]
+pub struct Open4Args {
+    pub sequence_id: SequenceId4,
+    pub share_access: u32,
+    pub share_deny: u32,
+    pub owner: OpenOwner4,
+    pub how: OpenFlag4,
+    pub claim: OpenClaim4,
+}
+
+#[derive(UnpackFrom, PackTo, Debug)]
+pub struct StateId4 {
+    sequence_id: u32,
+    other: [u8; NFS4_OTHER_SIZE],
+}
+
+#[derive(UnpackFrom, PackTo, Debug)]
+pub enum OpenDelegation4 {
+    None,
+    // Read(OpenReadDelegation4),
+    // Write(OpenWriteDelegation4),
+}
+
+#[derive(UnpackFrom, PackTo, Debug)]
+pub struct Open4ResOk {
+    state_id: StateId4,
     change_info: ChangeInfo4,
+    result_flags: u32,
+    attr_set: Bitmap4,
+    delegation: OpenDelegation4,
 }
 
 // --------------
@@ -276,6 +404,9 @@ pub enum ArgOp4 {
 
     #[xdr(OP_PUTROOTFH)] // 24
     PutRootFh,
+
+    #[xdr(OP_READDIR)] // 26
+    ReadDir(ReadDir4Args),
 
     #[xdr(OP_REMOVE)] // 28
     Remove(Remove4Args),
@@ -347,6 +478,9 @@ pub enum ResultOp4 {
 
     #[xdr(OP_PUTROOTFH)] // 24
     PutRootFh(core::result::Result<(), u32>),
+
+    #[xdr(OP_READDIR)] // 26
+    ReadDir(core::result::Result<ReadDir4ResOk, u32>),
 
     #[xdr(OP_REMOVE)] // 28
     Remove(core::result::Result<Remove4ResOk, u32>),

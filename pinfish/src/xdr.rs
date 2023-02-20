@@ -304,6 +304,12 @@ impl<T: PackTo<B>, B: Packer> PackTo<B> for Option<T> {
     }
 }
 
+impl<T: PackTo<B>, B: Packer> PackTo<B> for Box<T> {
+    fn pack_to(&self, buf: &mut B) {
+        self.as_ref().pack_to(buf)
+    }
+}
+
 impl<B: Packer> PackTo<B> for Vec<u8> {
     fn pack_to(&self, buf: &mut B) {
         buf.pack_opaque(self);
@@ -352,6 +358,12 @@ impl<T: UnpackFrom<B>, B: Unpacker> UnpackFrom<B> for Option<T> {
             1 => Ok(Some(T::unpack_from(buf)?)),
             _ => Err(INVALID_DATA.into()),
         }
+    }
+}
+
+impl<T: UnpackFrom<B>, B: Unpacker> UnpackFrom<B> for Box<T> {
+    fn unpack_from(buf: &mut B) -> Result<Self> {
+        Ok(Box::new(T::unpack_from(buf)?))
     }
 }
 

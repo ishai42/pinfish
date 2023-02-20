@@ -24,12 +24,12 @@ pub struct Bitmap4 {
 
 impl Bitmap4 {
     /// Returns an empty bitmap
-    fn new() -> Self {
+    pub fn new() -> Self {
         Bitmap4 { array: Vec::new() }
     }
 
     /// Checks if the `n`th bit is set
-    fn is_set(&self, n: u32) -> bool {
+    pub fn is_set(&self, n: u32) -> bool {
         let word = (n / 32) as usize;
         let bit = n % 32;
         if word >= self.array.len() {
@@ -40,7 +40,7 @@ impl Bitmap4 {
     }
 
     /// Sets the `n`th bit
-    fn set(&mut self, n: u32) {
+    pub fn set(&mut self, n: u32) {
         let n = n as usize;
         let word = n / 32;
         let bit = n % 32;
@@ -52,7 +52,7 @@ impl Bitmap4 {
     }
 
     /// Clears the `n`th bit
-    fn clear(&mut self, n: u32) {
+    pub fn clear(&mut self, n: u32) {
         let n = n as usize;
         let word = n / 32;
         let bit = n % 32;
@@ -65,7 +65,7 @@ impl Bitmap4 {
 }
 
 /// File types (RFC 7531)
-#[derive(PackTo, Debug, UnpackFrom)]
+#[derive(PackTo, Debug, UnpackFrom, Copy, Clone)]
 pub enum NfsType4 {
     Reg = 1,
     Dir = 2,
@@ -86,8 +86,8 @@ pub struct FileAttributes {
     pub change: Option<u64>,
     pub size: Option<u64>,
     pub mode: Option<u32>,
-    pub owner: Option<u32>,
-    pub owner_group: Option<u32>,
+    pub owner: Option<String>,
+    pub owner_group: Option<String>,
 }
 
 // applies macro to all fields in order
