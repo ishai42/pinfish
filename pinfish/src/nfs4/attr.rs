@@ -17,7 +17,7 @@ pub const OWNER: u32 = 36;
 pub const OWNER_GROUP: u32 = 37;
 
 /// A bitmap that serializes at NFS4 bitmap4 type
-#[derive(PackTo, UnpackFrom, Debug)]
+#[derive(PackTo, UnpackFrom, Debug, Clone)]
 pub struct Bitmap4 {
     array: Vec<u32>,
 }

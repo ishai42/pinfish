@@ -2,7 +2,10 @@ use crate::{
     nfs4::{
         self,
         attr::{self, Bitmap4},
-        ops::{ClientId4, Cookie4, NfsFh4, ReadDir4ResOk, SequenceId4, SessionId4, Verifier4},
+        ops::{
+            ClientId4, Cookie4, NfsFh4, Open4ResOk, Read4ResOk, ReadDir4ResOk, SequenceId4,
+            SessionId4, StateId4, Verifier4,
+        },
         sequence::{ClientSequence, ClientSequencer},
     },
     result::{Result, INVALID_DATA, NOT_CONNECTED},
@@ -138,7 +141,8 @@ impl NfsClient {
                         verifier: 0,
                         owner_id: Vec::from(*b"owner/id/string/2"),
                     },
-                    flags: nfs4::ops::EXCHGID4_FLAG_USE_PNFS_MDS
+                    flags: nfs4::ops::EXCHGID4_FLAG_BIND_PRINC_STATEID
+                        | nfs4::ops::EXCHGID4_FLAG_SUPP_MOVED_MIGR
                         | nfs4::ops::EXCHGID4_FLAG_SUPP_MOVED_REFER,
                     state_protect: nfs4::ops::StateProtect4A::None,
                     client_impl_id: None,
@@ -496,6 +500,111 @@ impl NfsClient {
                 let mut readdir = Err(crate::result::INTERNAL_ERROR);
                 std::mem::swap(&mut *reply, &mut readdir);
                 Ok(readdir?)
+            } else {
+                Err(INVALID_DATA.into())
+            }
+        } else {
+            Err(NOT_CONNECTED.into())
+        }
+    }
+
+    /// Make a PUTFH | OPEN call and return the result
+    pub async fn open_by_id(
+        &self,
+        file: &NfsFh4,
+        share_access: u32,
+        share_deny: u32,
+    ) -> Result<Open4ResOk> {
+        let xid = RpcClient::next_xid();
+        let mut buf = self.new_buf_with_call_header(xid, nfs4::PROC_COMPOUND);
+
+        if let Some(rpc) = &self.rpc {
+            let mut compound = nfs4::ops::Compound::new();
+            let sequence = self.seq.get_seq().await;
+            compound
+                .arg_array
+                .push(self.new_sequence_op(&sequence, false));
+            compound
+                .arg_array
+                .push(nfs4::ops::ArgOp4::PutFh(nfs4::ops::PutFh4Args {
+                    object: file.clone(),
+                }));
+            compound
+                .arg_array
+                .push(nfs4::ops::ArgOp4::Open(nfs4::ops::Open4Args {
+                    seqid: 0,
+                    share_access,
+                    share_deny,
+                    owner: nfs4::ops::OpenOwner4 {
+                        client_id: self.client_id.get(),
+                        owner: "foo".into(),
+                    },
+                    how: nfs4::ops::OpenFlag4::NoCreate,
+                    claim: nfs4::ops::OpenClaim4::FileHandle,
+                }));
+
+            compound.pack_to(&mut buf);
+
+            let buf = Self::finalize(buf);
+            let mut response_buf = rpc.call(buf, xid).await?;
+            rpc.check_header(&mut response_buf)?;
+            let mut resp = nfs4::ops::CompoundResult::unpack_from(&mut response_buf)?;
+            if resp.status != nfs4::NFS4_OK {
+                return Err(resp.status.into());
+            }
+
+            if let nfs4::ops::ResultOp4::Open(reply) = &mut resp.result_array[2] {
+                Ok(reply.clone()?)
+            } else {
+                Err(INVALID_DATA.into())
+            }
+        } else {
+            Err(NOT_CONNECTED.into())
+        }
+    }
+
+    /// Make a PUTFH | READ call and return the result
+    pub async fn read(
+        &self,
+        fh: &NfsFh4,
+        state_id: &StateId4,
+        offset: u64,
+        count: u32,
+    ) -> Result<Read4ResOk> {
+        let xid = RpcClient::next_xid();
+        let mut buf = self.new_buf_with_call_header(xid, nfs4::PROC_COMPOUND);
+
+        if let Some(rpc) = &self.rpc {
+            let mut compound = nfs4::ops::Compound::new();
+            let sequence = self.seq.get_seq().await;
+            compound
+                .arg_array
+                .push(self.new_sequence_op(&sequence, false));
+            compound
+                .arg_array
+                .push(nfs4::ops::ArgOp4::PutFh(nfs4::ops::PutFh4Args {
+                    object: fh.clone(),
+                }));
+            compound
+                .arg_array
+                .push(nfs4::ops::ArgOp4::Read(nfs4::ops::Read4Args {
+                    state_id: state_id.clone(),
+                    offset,
+                    count,
+                }));
+
+            compound.pack_to(&mut buf);
+
+            let buf = Self::finalize(buf);
+            let mut response_buf = rpc.call(buf, xid).await?;
+            rpc.check_header(&mut response_buf)?;
+            let mut resp = nfs4::ops::CompoundResult::unpack_from(&mut response_buf)?;
+            if resp.status != nfs4::NFS4_OK {
+                return Err(resp.status.into());
+            }
+
+            if let nfs4::ops::ResultOp4::Read(reply) = &mut resp.result_array[2] {
+                Ok(reply.clone()?)
             } else {
                 Err(INVALID_DATA.into())
             }

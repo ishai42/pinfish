@@ -10,7 +10,9 @@ pub use super::attr::{Bitmap4, FileAttributes, NfsType4};
 const OP_CREATE: u32 = 6;
 const OP_GETFH: u32 = 10;
 const OP_LOOKUP: u32 = 15;
+const OP_OPEN: u32 = 18;
 const OP_PUTFH: u32 = 22;
+const OP_READ: u32 = 25;
 const OP_READDIR: u32 = 26;
 const OP_REMOVE: u32 = 28;
 const OP_PUTROOTFH: u32 = 24;
@@ -248,7 +250,7 @@ pub struct Create4Args {
     pub attributes: FileAttributes,
 }
 
-#[derive(UnpackFrom, PackTo, Debug)]
+#[derive(UnpackFrom, PackTo, Debug, Clone)]
 pub struct ChangeInfo4 {
     atomic: bool,
     before: ChangeId4,
@@ -348,15 +350,19 @@ pub enum CreateHow4 {
 
 #[derive(PackTo, Debug)]
 pub enum OpenClaim4 {
+    #[xdr(0)]
     Null(String),
     //    Previous(OpenDelegationType4),
     //    DelegateCur(OpenClaimDelegateCur4),
     //    DelegatePrev(String),
+    #[xdr(4)]
+    FileHandle,
 }
 
 #[derive(PackTo, Debug)]
 pub struct Open4Args {
-    pub sequence_id: SequenceId4,
+    /// The "seqid" field of the request is not used in NFSv4.1
+    pub seqid: SequenceId4,
     pub share_access: u32,
     pub share_deny: u32,
     pub owner: OpenOwner4,
@@ -364,26 +370,39 @@ pub struct Open4Args {
     pub claim: OpenClaim4,
 }
 
-#[derive(UnpackFrom, PackTo, Debug)]
+#[derive(UnpackFrom, PackTo, Debug, Clone)]
 pub struct StateId4 {
     sequence_id: u32,
     other: [u8; NFS4_OTHER_SIZE],
 }
 
-#[derive(UnpackFrom, PackTo, Debug)]
+#[derive(UnpackFrom, PackTo, Debug, Clone)]
 pub enum OpenDelegation4 {
     None,
     // Read(OpenReadDelegation4),
     // Write(OpenWriteDelegation4),
 }
 
-#[derive(UnpackFrom, PackTo, Debug)]
+#[derive(UnpackFrom, PackTo, Debug, Clone)]
 pub struct Open4ResOk {
-    state_id: StateId4,
-    change_info: ChangeInfo4,
-    result_flags: u32,
-    attr_set: Bitmap4,
-    delegation: OpenDelegation4,
+    pub state_id: StateId4,
+    pub change_info: ChangeInfo4,
+    pub result_flags: u32,
+    pub attr_set: Bitmap4,
+    pub delegation: OpenDelegation4,
+}
+
+#[derive(PackTo, Debug)]
+pub struct Read4Args {
+    pub state_id: StateId4,
+    pub offset: u64,
+    pub count: u32,
+}
+
+#[derive(UnpackFrom, PackTo, Debug, Clone)]
+pub struct Read4ResOk {
+    pub eof: bool,
+    pub data: bytes::Bytes,
 }
 
 // --------------
@@ -399,11 +418,17 @@ pub enum ArgOp4 {
     #[xdr(OP_LOOKUP)] // 15
     Lookup(Lookup4Args),
 
+    #[xdr(OP_OPEN)] // 18
+    Open(Open4Args),
+
     #[xdr(OP_PUTFH)] // 22
     PutFh(PutFh4Args),
 
     #[xdr(OP_PUTROOTFH)] // 24
     PutRootFh,
+
+    #[xdr(OP_READ)] // 25
+    Read(Read4Args),
 
     #[xdr(OP_READDIR)] // 26
     ReadDir(ReadDir4Args),
@@ -473,11 +498,17 @@ pub enum ResultOp4 {
     #[xdr(OP_LOOKUP)] // 15
     Lookup(core::result::Result<(), u32>),
 
+    #[xdr(OP_OPEN)] // 18
+    Open(core::result::Result<Open4ResOk, u32>),
+
     #[xdr(OP_PUTFH)] // 22
     PutFh(core::result::Result<(), u32>),
 
     #[xdr(OP_PUTROOTFH)] // 24
     PutRootFh(core::result::Result<(), u32>),
+
+    #[xdr(OP_READ)] // 25
+    Read(core::result::Result<Read4ResOk, u32>),
 
     #[xdr(OP_READDIR)] // 26
     ReadDir(core::result::Result<ReadDir4ResOk, u32>),

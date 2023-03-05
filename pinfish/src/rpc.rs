@@ -314,7 +314,9 @@ impl RpcClientReceiver {
                     match tx {
                         None => println!("unmatched xid {}", xid),
                         Some(tx) => {
-                            tx.send(buf);
+                            if let Err(_) = tx.send(buf) {
+                                println!("caller for xid {} dropped", xid);
+                            }
                         }
                     }
                 }
@@ -327,6 +329,7 @@ impl RpcClientReceiver {
 pub struct RpcClient {
     connection: tokio::sync::Mutex<WriteHalf<TcpStream>>,
     pending: Arc<Mutex<BTreeMap<u32, oneshot::Sender<Bytes>>>>,
+    receiver: tokio::task::JoinHandle<()>,
 }
 
 impl RpcClient {
@@ -340,13 +343,14 @@ impl RpcClient {
             max_size: MAX_PACKET_SIZE,
         };
 
-        tokio::spawn(async move {
-            reader.run().await;
+        let receiver = tokio::spawn(async move {
+            let _ = reader.run().await;
         });
 
         RpcClient {
             connection: tokio::sync::Mutex::new(write),
             pending,
+            receiver,
         }
     }
 
@@ -402,5 +406,11 @@ impl RpcClient {
                 }
             }
         }
+    }
+}
+
+impl Drop for RpcClient {
+    fn drop(&mut self) {
+        self.receiver.abort();
     }
 }

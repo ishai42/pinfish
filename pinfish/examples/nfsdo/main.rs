@@ -1,7 +1,14 @@
-use pinfish::{nfs4, result};
+use pinfish::{
+    nfs4::{
+        self,
+        ops::{OPEN4_SHARE_ACCESS_READ, OPEN4_SHARE_DENY_NONE},
+    },
+    result,
+};
 
 use argh::FromArgs;
 use std::error::Error;
+use std::io::{self, Write};
 
 #[derive(FromArgs)]
 /// Test NFS client
@@ -25,6 +32,7 @@ enum Commands {
     Mkdir(Mkdir),
     Remove(Remove),
     ReadDir(ReadDir),
+    Read(Read),
 }
 
 /// Lookup path and print the resulting FH
@@ -55,6 +63,14 @@ struct Remove {
 #[derive(FromArgs, PartialEq, Debug)]
 #[argh(subcommand, name = "ls")]
 struct ReadDir {
+    #[argh(positional)]
+    path: String,
+}
+
+/// Read a file and send output to stdout
+#[derive(FromArgs, PartialEq, Debug)]
+#[argh(subcommand, name = "read")]
+struct Read {
     #[argh(positional)]
     path: String,
 }
@@ -112,6 +128,26 @@ async fn ls(client: &mut nfs4::client::NfsClient, fh: &nfs4::ops::NfsFh4) -> res
     Ok(())
 }
 
+async fn read(client: &mut nfs4::client::NfsClient, fh: &nfs4::ops::NfsFh4) -> result::Result<()> {
+    let open_result = client
+        .open_by_id(fh, OPEN4_SHARE_ACCESS_READ, OPEN4_SHARE_DENY_NONE)
+        .await?;
+
+    let mut eof = false;
+    let mut offset = 0;
+    const CHUNK: u32 = 1024 * 1024;
+    while !eof {
+        let result = client
+            .read(fh, &open_result.state_id, offset, CHUNK)
+            .await?;
+        eof = result.eof;
+        io::stdout().write_all(&result.data)?;
+        offset += result.data.len() as u64;
+    }
+
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     let cmd: Command = argh::from_env();
     let host_string = std::format!("{}:{}", cmd.host, cmd.port);
@@ -135,15 +171,23 @@ fn main() -> Result<(), Box<dyn Error>> {
 
             println!("session created");
 
-            //            client.send_reclaim_complete().await?;
+            match client.send_reclaim_complete().await {
+                Ok(_) => (),
+                Err(code) => {
+                    if code.get() != result::NFS4ERR_COMPLETE_ALREADY {
+                        Err(code)?;
+                    }
+                }
+            }
 
-            //            println!("reclaim complete!");
+            println!("reclaim complete!");
 
             let (path, last) = match &cmd.cmd {
                 Commands::Lookup(lookup) => (lookup.path.as_str(), ""),
                 Commands::Mkdir(mkdir) => split_last(&mkdir.path),
                 Commands::Remove(remove) => split_last(&remove.path),
                 Commands::ReadDir(readdir) => (readdir.path.as_str(), ""),
+                Commands::Read(read) => (read.path.as_str(), ""),
             };
 
             let fh = client.resolve_path(&path).await?;
@@ -158,6 +202,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                     client.remove(&fh, last).await?;
                 }
                 Commands::ReadDir(_) => ls(&mut client, &fh).await?,
+                Commands::Read(_) => read(&mut client, &fh).await?,
             };
 
             Ok(())
