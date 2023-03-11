@@ -51,3 +51,27 @@ pub const NFSPROC3_FSTAT: u32 = 18;
 pub const NFSPROC3_FSINFO: u32 = 19;
 pub const NFSPROC3_PATCHCONF: u32 = 20;
 pub const NFSPROC3_COMMIT: u32 = 21;
+
+pub const MNT3_OK: u32 = 0; /* no error */
+pub const MNT3ERR_PERM: u32 = 1; /* Not owner */
+pub const MNT3ERR_NOENT: u32 = 2; /* No such file or directory */
+pub const MNT3ERR_IO: u32 = 5; /* I/O error */
+pub const MNT3ERR_ACCES: u32 = 13; /* Permission denied */
+pub const MNT3ERR_NOTDIR: u32 = 20; /* Not a directory */
+pub const MNT3ERR_INVAL: u32 = 22; /* Invalid argument */
+pub const MNT3ERR_NAMETOOLONG: u32 = 63; /* Filename too long */
+pub const MNT3ERR_NOTSUPP: u32 = 10004; /* Operation not supported */
+pub const MNT3ERR_SERVERFAULT: u32 = 10006; /* A failure on the server */
+
+pub const ACCESS3_READ: u32 = 0x0001;
+pub const ACCESS3_LOOKUP: u32 = 0x0002;
+pub const ACCESS3_MODIFY: u32 = 0x0004;
+pub const ACCESS3_EXTEND: u32 = 0x0008;
+pub const ACCESS3_DELETE: u32 = 0x0010;
+pub const ACCESS3_EXECUTE: u32 = 0x0020;
+
+/// RPC program number for NFS
+pub const PROG_NFS: u32 = 100003;
+
+/// RPC program number for MOUNT
+pub const PROG_MOUNT: u32 = 100005;

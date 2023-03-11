@@ -1,3 +1,7 @@
-pub mod consts;
+pub mod client;
+mod consts;
 pub mod procs;
-pub mod types;
+mod types;
+
+pub use consts::*;
+pub use types::*;

@@ -13,6 +13,7 @@ pub type Gid3 = u32;
 pub type Size3 = u64;
 pub type Count3 = u32;
 pub type Mode3 = u32;
+pub type Offset3 = u64;
 
 #[derive(PackTo, Debug, UnpackFrom, Copy, Clone)]
 pub enum FileType3 {
@@ -31,7 +32,7 @@ pub struct SpecData3 {
     pub data2: u32,
 }
 
-#[derive(PackTo, UnpackFrom, Debug, Clone)]
+#[derive(PackTo, UnpackFrom, Debug, Clone, Default)]
 pub struct NfsFh3 {
     pub data: Vec<u8>, // should be opaque<NFS3_FHSIZE>
 }
@@ -60,4 +61,52 @@ pub struct FileAttributes {
     pub atime: NfsTime3,
     pub mtime: NfsTime3,
     pub ctime: NfsTime3,
+}
+
+#[derive(PackTo, UnpackFrom, Debug)]
+pub enum TimeHow {
+    DontChange,
+    SetToServerTime,
+    SetToClientTime(NfsTime3),
+}
+
+impl Default for TimeHow {
+    fn default() -> Self {
+        TimeHow::SetToServerTime
+    }
+}
+
+#[derive(PackTo, UnpackFrom, Debug, Default)]
+pub struct SetAttributes {
+    pub mode: Option<Mode3>,
+    pub uid: Option<Uid3>,
+    pub gid: Option<Gid3>,
+    pub size: Option<Size3>,
+    pub atime: TimeHow,
+    pub mtime: TimeHow,
+}
+
+/// Subset of pre-operation attributes used for weak cache consistency
+#[derive(PackTo, UnpackFrom, Debug)]
+pub struct WccAttributes {
+    pub size: Size3,
+    pub mtime: NfsTime3,
+    pub ctime: NfsTime3,
+}
+
+pub type PostOpAttributes = Option<FileAttributes>;
+pub type PreOpAttributes = Option<WccAttributes>;
+pub type PostOpFh3 = Option<NfsFh3>;
+
+#[derive(PackTo, UnpackFrom, Debug)]
+pub struct DirOpArgs3 {
+    pub dir: NfsFh3,
+    pub name: Filename3,
+}
+
+/// Weak Cache Consistency data
+#[derive(PackTo, UnpackFrom, Debug)]
+pub struct WccData {
+    pub before: PreOpAttributes,
+    pub after: PostOpAttributes,
 }
