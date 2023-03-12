@@ -2,7 +2,8 @@
 name = "pinfish-macros"
 version = "0.1.0-alpha"
 edition = "2021"
-
+license = "MIT"
+description = "proc macros for pinfish"
 
 [lib]
 proc-macro = true
