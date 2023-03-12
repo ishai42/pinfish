@@ -3,32 +3,13 @@ use crate::{
     xdr::{UnpackFrom, Unpacker},
 };
 
-mod lookup;
-pub use lookup::*;
+macro_rules! pub_use{
+    ($($name:ident),+) => { $(mod $name; pub use $name::*;)+ }
+}
 
-mod create;
-pub use create::*;
-
-mod getattr;
-pub use getattr::*;
-
-mod setattr;
-pub use setattr::*;
-
-mod access;
-pub use access::*;
-
-mod readlink;
-pub use readlink::*;
-
-mod read;
-pub use read::*;
-
-mod write;
-pub use write::*;
-
-mod mkdir;
-pub use mkdir::*;
+pub_use!(lookup, create, getattr, setattr, access, readlink, read, write);
+pub_use!(mkdir, symlink, mknod, remove, rmdir, rename, link, readdir);
+pub_use!(readdirplus, fsstat, fsinfo, pathconf, commit);
 
 impl<T, E, B> UnpackFrom<B> for core::result::Result<T, (u32, E)>
 where

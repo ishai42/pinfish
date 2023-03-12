@@ -47,9 +47,9 @@ pub const NFSPROC3_RENAME: u32 = 14;
 pub const NFSPROC3_LINK: u32 = 15;
 pub const NFSPROC3_READDIR: u32 = 16;
 pub const NFSPROC3_READDIRPLUS: u32 = 17;
-pub const NFSPROC3_FSTAT: u32 = 18;
+pub const NFSPROC3_FSSTAT: u32 = 18;
 pub const NFSPROC3_FSINFO: u32 = 19;
-pub const NFSPROC3_PATCHCONF: u32 = 20;
+pub const NFSPROC3_PATHCONF: u32 = 20;
 pub const NFSPROC3_COMMIT: u32 = 21;
 
 pub const MNT3_OK: u32 = 0; /* no error */
@@ -75,3 +75,8 @@ pub const PROG_NFS: u32 = 100003;
 
 /// RPC program number for MOUNT
 pub const PROG_MOUNT: u32 = 100005;
+
+pub const FSF3_LINK: u32 = 0x0001;
+pub const FSF3_SYMLINK: u32 = 0x0002;
+pub const FSF3_HOMOGENEOUS: u32 = 0x0008;
+pub const FSF3_CANSETTIME: u32 = 0x0010;
