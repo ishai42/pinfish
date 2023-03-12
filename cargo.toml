@@ -1,0 +1,6 @@
+[workspace]
+
+members = [
+    "pinfish-macros",
+    "pinfish",
+]
