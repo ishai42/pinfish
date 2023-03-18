@@ -1,3 +1,5 @@
+//! Definitions for structures needed to encode/decode RPC calls and replies
+//!
 use crate::{
     result::{
         ErrorCode, Result, INVALID_DATA, RPC_GARBAGE_ARGS, RPC_PROC_UNAVAIL, RPC_PROG_MISMATCH,
@@ -308,9 +310,10 @@ impl RpcClientReceiver {
             match msg_type {
                 CALL => println!("CB not implemented yet"),
                 REPLY => {
-                    let mut pending = self.pending.lock().unwrap();
-                    let tx = pending.remove(&xid);
-                    drop(pending);
+                    let tx = {
+                        let mut pending = self.pending.lock().unwrap();
+                        pending.remove(&xid)
+                    };
                     match tx {
                         None => println!("unmatched xid {}", xid),
                         Some(tx) => {
@@ -368,9 +371,10 @@ impl RpcClient {
 
     pub async fn call(&self, buf: impl Buf, xid: u32) -> io::Result<Bytes> {
         let (tx, rx) = oneshot::channel();
-        let mut pending = self.pending.lock().unwrap();
-        pending.insert(xid, tx);
-        drop(pending);
+        {
+            let mut pending = self.pending.lock().unwrap();
+            pending.insert(xid, tx);
+        }
 
         self.send(buf).await?;
 

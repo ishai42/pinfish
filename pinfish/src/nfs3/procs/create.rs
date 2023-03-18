@@ -28,3 +28,10 @@ pub struct Create3ResOk {
     pub attributes: PostOpAttributes,
     pub wcc_data: WccData,
 }
+
+#[derive(PackTo, UnpackFrom, Debug)]
+pub struct Create3ResFail {
+    pub dir_wcc: WccData,
+}
+
+pub type CreateResult = Result<Create3ResOk, (u32, Create3ResFail)>;

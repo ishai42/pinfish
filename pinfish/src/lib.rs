@@ -1,3 +1,5 @@
+//! A library for encoding and decoding NFS packets
+
 pub mod mount;
 pub mod nfs3;
 pub mod nfs4;

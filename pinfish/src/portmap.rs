@@ -1,3 +1,5 @@
+//! This modules defines the constants and structures for encoding and
+//! decoding RPC port mapper and bind protocols.
 use crate::xdr;
 use pinfish_macros::{PackTo, UnpackFrom};
 

@@ -1,3 +1,5 @@
+//! This modules defines the constants and structures for encoding and
+//! decoding NFS MOUNT protocol.
 use crate::{nfs3::NfsFh3, xdr};
 use pinfish_macros::{PackTo, UnpackFrom};
 

@@ -6,7 +6,7 @@ use pinfish::{
     result,
 };
 
-use argh::FromArgs;
+use argp::FromArgs;
 use std::error::Error;
 use std::io::{self, Write};
 
@@ -14,19 +14,19 @@ use std::io::{self, Write};
 /// Test NFS client
 struct Command {
     /// host name or IP address
-    #[argh(option, short = 'h')]
+    #[argp(option, short = 'h')]
     host: String,
 
     /// port, default is 2049
-    #[argh(option, short = 'p', default = "2049")]
+    #[argp(option, short = 'p', default = "2049")]
     port: u16,
 
-    #[argh(subcommand)]
+    #[argp(subcommand)]
     cmd: Commands,
 }
 
 #[derive(FromArgs, PartialEq, Debug)]
-#[argh(subcommand)]
+#[argp(subcommand)]
 enum Commands {
     Lookup(Lookup),
     Mkdir(Mkdir),
@@ -37,41 +37,41 @@ enum Commands {
 
 /// Lookup path and print the resulting FH
 #[derive(FromArgs, PartialEq, Debug)]
-#[argh(subcommand, name = "lookup")]
+#[argp(subcommand, name = "lookup")]
 struct Lookup {
-    #[argh(positional)]
+    #[argp(positional)]
     path: String,
 }
 
 /// Make a directory
 #[derive(FromArgs, PartialEq, Debug)]
-#[argh(subcommand, name = "mkdir")]
+#[argp(subcommand, name = "mkdir")]
 struct Mkdir {
-    #[argh(positional)]
+    #[argp(positional)]
     path: String,
 }
 
 /// Delete a file or a directory
 #[derive(FromArgs, PartialEq, Debug)]
-#[argh(subcommand, name = "remove")]
+#[argp(subcommand, name = "remove")]
 struct Remove {
-    #[argh(positional)]
+    #[argp(positional)]
     path: String,
 }
 
 /// Delete a file or a directory
 #[derive(FromArgs, PartialEq, Debug)]
-#[argh(subcommand, name = "ls")]
+#[argp(subcommand, name = "ls")]
 struct ReadDir {
-    #[argh(positional)]
+    #[argp(positional)]
     path: String,
 }
 
 /// Read a file and send output to stdout
 #[derive(FromArgs, PartialEq, Debug)]
-#[argh(subcommand, name = "read")]
+#[argp(subcommand, name = "read")]
 struct Read {
-    #[argh(positional)]
+    #[argp(positional)]
     path: String,
 }
 
@@ -149,7 +149,7 @@ async fn read(client: &mut nfs4::client::NfsClient, fh: &nfs4::ops::NfsFh4) -> r
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let cmd: Command = argh::from_env();
+    let cmd: Command = argp::from_env();
     let host_string = std::format!("{}:{}", cmd.host, cmd.port);
 
     tokio::runtime::Builder::new_multi_thread()

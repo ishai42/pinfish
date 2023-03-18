@@ -1,6 +1,8 @@
+//! This module implements helper traits for packing and unpacking
+//! packets in XDR standard (RFC 4506).
+//!
+
 use crate::result::{Result, INVALID_DATA, NOT_ENOUGH_DATA};
-/// This module implements helper traits for packing and unpacking
-/// packets in XDR standard (RFC 4506)
 use bytes::{Buf, BufMut, Bytes};
 
 const PAD_ZERO: [u8; 4] = [0; 4];
