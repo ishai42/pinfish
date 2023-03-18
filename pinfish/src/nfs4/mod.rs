@@ -1,3 +1,4 @@
+//! Definitions for encoding/decoding NFSv4.1 calls and replies.
 pub mod client;
 pub mod ops;
 pub mod sequence;

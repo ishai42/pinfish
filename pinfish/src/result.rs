@@ -53,7 +53,8 @@ impl From<std::io::Error> for ErrorCode {
             std::io::ErrorKind::ConnectionAborted => CONNECTION_ABORTED,
             std::io::ErrorKind::NotConnected => NOT_CONNECTED,
             std::io::ErrorKind::InvalidData => INVALID_DATA,
-            _ => todo!("other IO errors"),
+            // std::io::ErrorKind::Uncategorized => UNCATEGORIZED_IO_ERROR,
+            _ => UNCATEGORIZED_IO_ERROR,
         }
         .into()
     }
@@ -101,5 +102,6 @@ pub const RPC_GARBAGE_ARGS: u32 = CRATE_ERROR_BASE + 11;
 pub const RPC_SYSTEM_ERR: u32 = CRATE_ERROR_BASE + 12;
 pub const RPC_REJECTED_MISMATCH: u32 = CRATE_ERROR_BASE + 13;
 pub const RPC_REJECTED_AUTH_ERROR: u32 = CRATE_ERROR_BASE + 14;
+pub const UNCATEGORIZED_IO_ERROR: u32 = CRATE_ERROR_BASE + 15;
 
 pub const NFS4ERR_COMPLETE_ALREADY: u32 = 10054;

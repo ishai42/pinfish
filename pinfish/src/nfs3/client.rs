@@ -176,6 +176,7 @@ impl NfsClient {
 
         let host = std::format!("{}:{}", &self.server, self.nfs_port);
         let connection = TcpStream::connect(host).await?;
+        connection.set_nodelay(true)?;
         self.nfs = Some(RpcClient::new(connection));
 
         Ok(())
@@ -241,6 +242,41 @@ impl NfsClient {
             let mut response_buf = rpc.call(buf, xid).await?;
             rpc.check_header(&mut response_buf)?;
             Ok(procs::MkdirResult::unpack_from(&mut response_buf)?)
+        } else {
+            Err(NOT_CONNECTED.into())
+        }
+    }
+
+    pub async fn call_create(
+        &self,
+        dir: &NfsFh3,
+        name: Filename3,
+        guarded: bool,
+    ) -> Result<procs::CreateResult> {
+        let xid = RpcClient::next_xid();
+        let mut buf = self.new_buf_with_call_header(xid, Program::Nfs, nfs3::NFSPROC3_CREATE);
+
+        if let Some(rpc) = &self.nfs {
+            let attributes = nfs3::SetAttributes {
+                mode: Some(0o644),
+                ..Default::default()
+            };
+            let how = if guarded {
+                procs::CreateHow3::Guarded(attributes)
+            } else {
+                procs::CreateHow3::Unchecked(attributes)
+            };
+            let dir = dir.clone();
+            let create = procs::Create3Args {
+                create_where: DirOpArgs3 { dir, name },
+                how,
+            };
+            create.pack_to(&mut buf);
+            let buf = Self::finalize(buf);
+
+            let mut response_buf = rpc.call(buf, xid).await?;
+            rpc.check_header(&mut response_buf)?;
+            Ok(procs::CreateResult::unpack_from(&mut response_buf)?)
         } else {
             Err(NOT_CONNECTED.into())
         }

@@ -1,16 +1,17 @@
 [package]
 name = "pinfish"
-version = "0.1.0-alpha"
+version = "0.1.0-alpha1"
 edition = "2021"
 license = "MIT"
 description = "Library for encoding and decoding NFS packets"
+exclude = ["examples"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 bytes = "1"
-tokio = { version = "1.21.0", features = ["full"] }
+tokio = { version = "1.26.0", features = ["full"] }
 pinfish-macros = { path = "../pinfish-macros", version = "0.1.0-alpha" }
 
 [dev-dependencies]
-argh = "0.1.8"
+argp = "0.1"

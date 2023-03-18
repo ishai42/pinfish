@@ -1,3 +1,4 @@
+//! Definitions for encoding/decoding NFSv3 calls and replies.
 pub mod client;
 mod consts;
 pub mod procs;

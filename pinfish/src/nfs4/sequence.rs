@@ -125,12 +125,12 @@ impl ClientSequencer {
             .await
             .expect("unexpected semaphore error");
 
-        let mut inner = self.inner.lock().unwrap();
-        let index = inner.allocate_slot();
-        let slot = index as u32;
-        inner.sequences[index] += 1;
-        let sequence = inner.sequences[index];
-        drop(inner);
+        let (slot, sequence) = {
+            let mut inner = self.inner.lock().unwrap();
+            let index = inner.allocate_slot();
+            inner.sequences[index] += 1;
+            (index as u32, inner.sequences[index])
+        };
 
         ClientSequence {
             info: SequenceInfo { slot, sequence },
