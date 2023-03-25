@@ -1,6 +1,6 @@
 [package]
 name = "pinfish"
-version = "0.1.0-alpha1"
+version = "0.1.0-alpha.2"
 edition = "2021"
 license = "MIT"
 description = "Library for encoding and decoding NFS packets"
@@ -16,3 +16,4 @@ pinfish-macros = { path = "../pinfish-macros", version = "0.1.0-alpha" }
 
 [dev-dependencies]
 argp = "0.1"
+rand = "0.8.4"

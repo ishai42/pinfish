@@ -3,10 +3,6 @@ use crate::{
     xdr::{UnpackFrom, Unpacker},
 };
 
-macro_rules! pub_use{
-    ($($name:ident),+) => { $(mod $name; pub use $name::*;)+ }
-}
-
 pub_use!(lookup, create, getattr, setattr, access, readlink, read, write);
 pub_use!(mkdir, symlink, mknod, remove, rmdir, rename, link, readdir);
 pub_use!(readdirplus, fsstat, fsinfo, pathconf, commit);
