@@ -182,6 +182,18 @@ impl NfsClient {
         Ok(())
     }
 
+    pub fn nfs_close_throttle(&self) {
+        if let Some(rpc) = &self.nfs {
+            rpc.close_throttle();
+        }
+    }
+
+    pub fn nfs_open_throttle(&self) {
+        if let Some(rpc) = &self.nfs {
+            rpc.open_throttle();
+        }
+    }
+
     pub async fn call_mount(&self, path: &str) -> Result<mount::MountResult> {
         let xid = RpcClient::next_xid();
         let mut buf = self.new_buf_with_call_header(xid, Program::Mount, mount::MOUNTPROC3_MNT);

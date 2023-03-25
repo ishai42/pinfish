@@ -5,6 +5,7 @@ use crate::{
         ErrorCode, Result, INVALID_DATA, RPC_GARBAGE_ARGS, RPC_PROC_UNAVAIL, RPC_PROG_MISMATCH,
         RPC_PROG_UNAVAIL, RPC_REJECTED_AUTH_ERROR, RPC_REJECTED_MISMATCH, RPC_SYSTEM_ERR,
     },
+    throttle::Throttle,
     xdr::{self, UnpackFrom, Unpacker as _},
 };
 use bytes::{Buf, BufMut, Bytes, BytesMut};
@@ -292,11 +293,13 @@ struct RpcClientReceiver {
     connection: ReadHalf<TcpStream>,
     pending: Arc<Mutex<BTreeMap<u32, oneshot::Sender<Bytes>>>>,
     max_size: u32,
+    throttle: Arc<Throttle>,
 }
 
 impl RpcClientReceiver {
     pub async fn run(&mut self) -> Result<()> {
         loop {
+            self.throttle.check().await;
             let mut buf = BytesMut::new();
             read_packet(&mut self.connection, &mut buf, self.max_size).await?;
             let mut buf = buf.freeze();
@@ -333,6 +336,7 @@ pub struct RpcClient {
     connection: tokio::sync::Mutex<WriteHalf<TcpStream>>,
     pending: Arc<Mutex<BTreeMap<u32, oneshot::Sender<Bytes>>>>,
     receiver: tokio::task::JoinHandle<()>,
+    throttle: Arc<Throttle>,
 }
 
 impl RpcClient {
@@ -340,10 +344,12 @@ impl RpcClient {
         let (read, write) = tokio::io::split(connection);
         let pending = Arc::new(Mutex::new(BTreeMap::new()));
 
+        let throttle = Arc::new(Throttle::new());
         let mut reader = RpcClientReceiver {
             connection: read,
             pending: pending.clone(),
             max_size: MAX_PACKET_SIZE,
+            throttle: throttle.clone(),
         };
 
         let receiver = tokio::spawn(async move {
@@ -354,7 +360,16 @@ impl RpcClient {
             connection: tokio::sync::Mutex::new(write),
             pending,
             receiver,
+            throttle,
         }
+    }
+
+    pub fn close_throttle(&self) {
+        self.throttle.close();
+    }
+
+    pub fn open_throttle(&self) {
+        self.throttle.open();
     }
 
     /// Returns a new xid (RPC transaction ID).
