@@ -1,6 +1,6 @@
 [package]
 name = "pinfish"
-version = "0.1.0-alpha.2"
+version = "0.0.1"
 edition = "2021"
 license = "MIT"
 description = "Library for encoding and decoding NFS packets"

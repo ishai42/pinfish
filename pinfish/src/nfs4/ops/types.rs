@@ -40,7 +40,7 @@ impl NfsTime4 {
     }
 }
 
-#[derive(PackTo, VecPackUnpack, Debug)]
+#[derive(PackTo, UnpackFrom, VecPackUnpack, Debug)]
 pub enum CallbackSecParams4 {
     AuthNone,
     // TODO : AuthSys
@@ -54,26 +54,26 @@ pub struct SpecData4 {
     minor: u32,
 }
 
-#[derive(UnpackFrom, PackTo, Debug, Clone)]
+#[derive(PackTo, UnpackFrom, Debug, Clone)]
 pub struct ChangeInfo4 {
     atomic: bool,
     before: ChangeId4,
     after: ChangeId4,
 }
 
-#[derive(PackTo, Debug)]
+#[derive(PackTo, UnpackFrom, Debug)]
 pub struct OpenOwner4 {
     pub client_id: ClientId4,
     pub owner: bytes::Bytes,
 }
 
-#[derive(UnpackFrom, PackTo, Debug, Clone)]
+#[derive(PackTo, UnpackFrom, Debug, Clone)]
 pub struct StateId4 {
     sequence_id: u32,
     other: [u8; NFS4_OTHER_SIZE],
 }
 
-#[derive(UnpackFrom, PackTo, Debug, Clone)]
+#[derive(PackTo, UnpackFrom, Debug, Clone)]
 pub enum OpenDelegation4 {
     None,
     // Read(OpenReadDelegation4),

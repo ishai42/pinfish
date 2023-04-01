@@ -9,7 +9,12 @@ pub use super::attr::{Bitmap4, FileAttributes, NfsType4};
 
 pub_use!(types);
 
+const OP_ACCESS: u32 = 3;
+const OP_CLOSE: u32 = 4;
+const OP_COMMIT: u32 = 5;
 const OP_CREATE: u32 = 6;
+const OP_DELEGPURGE: u32 = 7;
+const OP_DELEGRETURN: u32 = 8;
 const OP_GETFH: u32 = 10;
 const OP_LOOKUP: u32 = 15;
 const OP_OPEN: u32 = 18;
@@ -53,10 +58,25 @@ pub const OPEN4_SHARE_DENY_BOTH: u32 = 0x00000003;
 
 // --------------
 
-#[derive(PackTo, Debug, VecPackUnpack)]
+#[derive(PackTo, UnpackFrom, Debug, VecPackUnpack)]
 pub enum ArgOp4 {
+    #[xdr(OP_ACCESS)] // 3
+    Access(Access4Args),
+
+    #[xdr(OP_CLOSE)] // 4
+    Close(Close4Args),
+
+    #[xdr(OP_COMMIT)] // 5
+    Commit(Commit4Args),
+
     #[xdr(OP_CREATE)] // 6
     Create(Create4Args),
+
+    #[xdr(OP_DELEGPURGE)] // 7
+    DelegPurge(DelegPurge4Args),
+
+    #[xdr(OP_DELEGRETURN)] // 8
+    DelegReturn(DelegReturn4Args),
 
     #[xdr(OP_GETFH)] // 10
     GetFh,
@@ -119,8 +139,23 @@ impl Compound {
 
 #[derive(UnpackFrom, Debug, VecPackUnpack)]
 pub enum ResultOp4 {
+    #[xdr(OP_ACCESS)] // 3
+    Access(core::result::Result<Access4ResOk, u32>),
+
+    #[xdr(OP_CLOSE)] // 4
+    Close(core::result::Result<Close4ResOk, u32>),
+
+    #[xdr(OP_COMMIT)] // 5
+    Commit(core::result::Result<Commit4ResOk, u32>),
+
     #[xdr(OP_CREATE)] // 6
     Create(core::result::Result<Create4ResOk, u32>),
+
+    #[xdr(OP_DELEGPURGE)] // 7
+    DelegPurge(core::result::Result<(), u32>),
+
+    #[xdr(OP_DELEGRETURN)] // 8
+    DelegReturn(core::result::Result<(), u32>),
 
     #[xdr(OP_GETFH)] // 10
     GetFh(core::result::Result<GetFh4ResOk, u32>),
@@ -182,13 +217,15 @@ impl<T: core::fmt::Debug + UnpackFrom<B>, B: Unpacker> UnpackFrom<B>
     }
 }
 
+pub_use!(exchange_id, lookup, sequence, create_session);
 pub_use!(
-    exchange_id,
-    lookup,
-    sequence,
-    create_session,
     create,
     remove,
-    putfh
+    putfh,
+    access,
+    close,
+    commit,
+    deleg_purge,
+    deleg_return
 );
 pub_use!(reclaim_complete, getfh, readdir, open, read);

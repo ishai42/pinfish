@@ -3,7 +3,7 @@ use pinfish_macros::{PackTo, UnpackFrom};
 use crate::xdr;
 
 
-#[derive(PackTo, Debug)]
+#[derive(PackTo, UnpackFrom, Debug)]
 pub struct ReadDir4Args {
     pub cookie: Cookie4,
     pub verifier: Verifier4,
@@ -12,7 +12,7 @@ pub struct ReadDir4Args {
     pub attr_request: Bitmap4,
 }
 
-#[derive(UnpackFrom, PackTo, Debug)]
+#[derive(PackTo, UnpackFrom, Debug)]
 pub struct Entry4 {
     pub cookie: Cookie4,
     pub name: Component4,
@@ -20,7 +20,7 @@ pub struct Entry4 {
     pub next_entry: Option<Box<Entry4>>,
 }
 
-#[derive(UnpackFrom, PackTo, Debug)]
+#[derive(PackTo, UnpackFrom, Debug)]
 pub struct DirList4 {
     pub entries: Option<Entry4>,
     pub eof: bool,
@@ -53,7 +53,7 @@ impl DirList4 {
     }
 }
 
-#[derive(UnpackFrom, PackTo, Debug)]
+#[derive(PackTo, UnpackFrom, Debug)]
 pub struct ReadDir4ResOk {
     pub cookie_verf: Verifier4,
     pub reply: DirList4,

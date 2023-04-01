@@ -4,7 +4,7 @@ use crate::xdr;
 
 
 /// channel_attrs4
-#[derive(UnpackFrom, PackTo, Debug)]
+#[derive(PackTo, UnpackFrom, Debug)]
 pub struct ChannelAttrs4 {
     pub header_pad_size: Count4,
     pub max_request_size: Count4,
@@ -17,7 +17,7 @@ pub struct ChannelAttrs4 {
 
 
 /// SEQUENCE
-#[derive(PackTo, Debug)]
+#[derive(PackTo, UnpackFrom, Debug)]
 pub struct Sequence4Args {
     pub session_id: SessionId4,
     pub sequence_id: SequenceId4,
@@ -27,7 +27,7 @@ pub struct Sequence4Args {
 }
 
 /// SEQUENCE
-#[derive(UnpackFrom, PackTo, Debug)]
+#[derive(PackTo, UnpackFrom, Debug)]
 pub struct Sequence4ResOk {
     pub session_id: SessionId4,
     pub sequence_id: SequenceId4,

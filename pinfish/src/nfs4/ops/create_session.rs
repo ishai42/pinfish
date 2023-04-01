@@ -7,7 +7,7 @@ pub const CREATE_SESSION4_FLAG_CONN_BACK_CHAN: u32 = 0x00000002;
 pub const CREATE_SESSION4_FLAG_CONN_RDMA: u32 = 0x00000004;
 
 /// 18.36 -- CREATE_SESSION4args
-#[derive(PackTo, Debug)]
+#[derive(PackTo, UnpackFrom, Debug)]
 pub struct CreateSession4Args {
     pub client_id: ClientId4,
     pub sequence: SequenceId4,
@@ -21,7 +21,7 @@ pub struct CreateSession4Args {
     pub sec_params: Vec<CallbackSecParams4>,
 }
 
-#[derive(UnpackFrom, PackTo, Debug)]
+#[derive(PackTo, UnpackFrom, Debug)]
 pub struct CreateSession4ResOk {
     pub session_id: SessionId4,
     pub sequence: SequenceId4,
