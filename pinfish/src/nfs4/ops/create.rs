@@ -2,7 +2,7 @@ use super::{SpecData4, Bitmap4, FileAttributes, ChangeInfo4};
 use pinfish_macros::{PackTo, UnpackFrom};
 use crate::xdr;
 
-#[derive(PackTo, Debug)]
+#[derive(PackTo, UnpackFrom, Debug)]
 pub enum CreateType4 {
     /// Symbolic link
     #[xdr(5)]
@@ -24,14 +24,14 @@ pub enum CreateType4 {
     Directory,
 }
 
-#[derive(PackTo, Debug)]
+#[derive(PackTo, UnpackFrom, Debug)]
 pub struct Create4Args {
     pub objtype: CreateType4,
     pub component: String,
     pub attributes: FileAttributes,
 }
 
-#[derive(UnpackFrom, PackTo, Debug)]
+#[derive(PackTo, UnpackFrom, Debug)]
 pub struct Create4ResOk {
     change_info: ChangeInfo4,
     attr_set: Bitmap4,

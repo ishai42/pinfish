@@ -27,7 +27,15 @@ impl std::error::Error for ErrorCode {}
 impl std::fmt::Display for ErrorCode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), core::fmt::Error> {
         let n = self.0.get();
-        write!(f, "error: {} (0x{:x}", n, n)
+        match n {
+            ERR_PERM => write!(f, "error: ERR_PERM"),
+            ERR_NOENT => write!(f, "error: ERR_NOENT"),
+            ERR_NXIO => write!(f, "error: ERR_NXIO"),
+            ERR_ACCESS => write!(f, "error: ERR_ACCESS"),
+            ERR_EXISTS => write!(f, "error: ERR_EXISTS"),
+            ERR_BADXDR => write!(f, "error: ERR_BADXDR"),
+            _ => write!(f, "error: {} (0x{:x}", n, n),
+        }
     }
 }
 
@@ -105,3 +113,13 @@ pub const RPC_REJECTED_AUTH_ERROR: u32 = CRATE_ERROR_BASE + 14;
 pub const UNCATEGORIZED_IO_ERROR: u32 = CRATE_ERROR_BASE + 15;
 
 pub const NFS4ERR_COMPLETE_ALREADY: u32 = 10054;
+
+// Error codes:
+
+const ERR_PERM: u32 = 1;
+const ERR_NOENT: u32 = 2;
+const ERR_NXIO: u32 = 5;
+const ERR_ACCESS: u32 = 13;
+const ERR_EXISTS: u32 = 17;
+
+const ERR_BADXDR: u32 = 10036;

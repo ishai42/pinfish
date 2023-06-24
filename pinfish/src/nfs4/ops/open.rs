@@ -3,20 +3,20 @@ use pinfish_macros::{PackTo, UnpackFrom};
 use crate::xdr;
 
 
-#[derive(PackTo, Debug)]
+#[derive(PackTo, UnpackFrom, Debug)]
 pub enum OpenFlag4 {
     NoCreate,
     Create(CreateHow4),
 }
 
-#[derive(PackTo, Debug)]
+#[derive(PackTo, UnpackFrom, Debug)]
 pub enum CreateHow4 {
     Unchecked(FileAttributes),
     Guarded(FileAttributes),
     Exclusive(Verifier4),
 }
 
-#[derive(PackTo, Debug)]
+#[derive(PackTo, UnpackFrom, Debug)]
 pub enum OpenClaim4 {
     #[xdr(0)]
     Null(String),
@@ -27,7 +27,7 @@ pub enum OpenClaim4 {
     FileHandle,
 }
 
-#[derive(PackTo, Debug)]
+#[derive(PackTo, UnpackFrom, Debug)]
 pub struct Open4Args {
     /// The "seqid" field of the request is not used in NFSv4.1
     pub seqid: SequenceId4,
@@ -38,7 +38,7 @@ pub struct Open4Args {
     pub claim: OpenClaim4,
 }
 
-#[derive(UnpackFrom, PackTo, Debug, Clone)]
+#[derive(PackTo, UnpackFrom, Debug, Clone)]
 pub struct Open4ResOk {
     pub state_id: StateId4,
     pub change_info: ChangeInfo4,

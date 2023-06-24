@@ -399,7 +399,7 @@ impl RpcClient {
     async fn send(&self, mut buf: impl Buf) -> io::Result<()> {
         let mut connection = self.connection.lock().await;
         while buf.has_remaining() {
-            connection.write_buf(&mut buf).await?;
+            connection.write_all_buf(&mut buf).await?;
         }
 
         Ok(())
